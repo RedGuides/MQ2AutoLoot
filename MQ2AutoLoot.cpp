@@ -6,9 +6,8 @@
 // and Shutdown for setup and cleanup, do NOT do it in DllMain.
 
 #define PLUGIN_NAME					"MQ2AutoLoot"                // Plugin Name
+#define VERSION						1.00
 #define	PLUGIN_MSG					"\ag[MQ2AutoLoot]\ax "     
-#define LIVE_VERSION
-//#define BETA_VERSION
 #define PERSONALBANKER_CLASS		40
 #define MERCHANT_CLASS				41
 #define GUILDBANKER_CLASS			66
@@ -16,12 +15,11 @@
 #ifndef PLUGIN_API
 #include "../MQ2Plugin.h"
 PreSetup(PLUGIN_NAME);
+PLUGIN_VERSION(VERSION);
 #endif PLUGIN_API
 
 #include <chrono>
 
-//typedef std::chrono::high_resolution_clock clock;
-//using namespace std::chrono;
 
 //MoveUtils 11.x
 PLUGIN_API bool bMULoaded = false;
@@ -29,10 +27,9 @@ bool bMUPointers = false;
 bool* pbStickOn;
 void(*fStickCommand)(PSPAWNINFO pChar, char* szLine);
 //MQ2EqBC shit
-PLUGIN_API bool bEQBCLoaded = false;
-bool bEQBCPointers = false;
-bool* pbEQBCNames;
-
+//PLUGIN_API bool bEQBCLoaded = false;
+//bool bEQBCPointers = false;
+//bool* pbEQBCNames;
 
 
 
@@ -91,6 +88,7 @@ void DestroyStuff(void);
 void DoLootStuff(CHAR* szAction);
 void DoBarterStuff(CHAR* szAction);
 void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem);
+void CreateLootINI(void);
 
 #pragma region Inlines
 // Returns TRUE if character is in game and has valid character data structures
@@ -1724,12 +1722,6 @@ void DoBarterStuff(CHAR* szAction)
 	{
 		WriteChatf(PLUGIN_MSG ":: You need to have least Rain of Fear expansion to use the barter functionality.");
 	}
-	if (!_stricmp(szAction, "Barter"))
-	{
-		WriteChatf(PLUGIN_MSG ":: This command is not activated, it will be added in the next update or two depending on when I get to it.");
-		StartLootStuff = false;
-		return;
-	}
 	// Getting ready to barter by opening the barter window open
 	if (!_stricmp(szAction, "Barter"))
 	{
@@ -2498,6 +2490,15 @@ void SetAutoLootVariables()
 		sprintf_s(LootINI, "%s\\Macros\\Loot.ini", gszINIPath);  // Default location is in your \macros\loot.ini
 		WritePrivateProfileString(GetCharInfo()->Name, "lootini", LootINI, INIFileName);
 	}
+	LONG Version = GetPrivateProfileInt("Settings", "Version", -1, LootINI);
+	if (Version == -1)
+	{
+		CreateLootINI();
+		CHAR Version[MAX_STRING] = { 0 };
+		sprintf_s(Version, "%1.2f", VERSION);
+		WritePrivateProfileString("Settings", "Version", Version, LootINI);
+	}
+
 	BarMinSellPrice = GetPrivateProfileInt("Settings", "BarMinSellPrice", -1, LootINI);
 	if (BarMinSellPrice == -1)
 	{
@@ -2516,23 +2517,23 @@ void SetAutoLootVariables()
 		CursorDelay = 10;
 		WritePrivateProfileString("Settings", "CursorDelay", "10", LootINI);
 	}
-	QuestKeep = GetPrivateProfileInt("Settings", "QuestKeep", -1, LootINI);
-	if (QuestKeep == -1)
-	{
-		QuestKeep = 10;
-		WritePrivateProfileString("Settings", "QuestKeep", "10", LootINI);
-	}
 	SaveBagSlots = GetPrivateProfileInt("Settings", "SaveBagSlots", -1, LootINI);
 	if (SaveBagSlots == -1)
 	{
 		SaveBagSlots = 0;
-		WritePrivateProfileString("Settings", "SaveBagSlots", "1", LootINI);
+		WritePrivateProfileString("Settings", "SaveBagSlots", "0", LootINI);
 	}
 	SpamLootInfo = GetPrivateProfileInt("Settings", "SpamLootInfo", -1, LootINI);
 	if (SpamLootInfo == -1)
 	{
 		SpamLootInfo = 1;
 		WritePrivateProfileString("Settings", "SpamLootInfo", "1", LootINI);
+	}
+	QuestKeep = GetPrivateProfileInt("Settings", "QuestKeep", -1, LootINI);
+	if (QuestKeep == -1)
+	{
+		QuestKeep = 10;
+		WritePrivateProfileString("Settings", "QuestKeep", "10", LootINI);
 	}
 	if (GetPrivateProfileString("Settings", "NoDropDefault", 0, NoDropDefault, MAX_STRING, LootINI) == 0)
 	{
@@ -2682,6 +2683,18 @@ void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
 	}
 }
 
+void CreateLootINI(void)
+{
+	CHAR INISections[MAX_STRING] = "Settings|Global|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z";
+	CHAR *pParsedToken = NULL;
+	CHAR *pParsedValue = strtok_s(INISections, "|", &pParsedToken);
+	while (pParsedValue != NULL)
+	{
+		WritePrivateProfileString(pParsedValue, "|===================================", "==================================|", LootINI);
+		pParsedValue = strtok_s(NULL, "|", &pParsedToken);
+	}
+}
+
 void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 {
 	if (!InGameOK()) return; 
@@ -2786,6 +2799,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		sprintf_s(LootINI, "%s\\Macros\\%s.ini", gszINIPath, Parm2);
 		WritePrivateProfileString(GetCharInfo()->Name, "lootini", LootINI, INIFileName);
 		WriteChatf(PLUGIN_MSG ":: The location for your loot ini is:\n \ag%s\ax", LootINI);
+		SetAutoLootVariables();
 	}
 	else if (!_stricmp(Parm1, "reload"))
 	{
