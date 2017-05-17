@@ -405,7 +405,7 @@ PLUGIN_API VOID OnPulse(VOID)
 					if (WinState((CXWnd*)pLootWnd))
 					{
 						PEQLOOTWINDOW pLoot = (PEQLOOTWINDOW)pLootWnd;
-						for (int nLootSlots = 0; nLootSlots < (int)pLoot->Size; nLootSlots++)
+						for (int nLootSlots = 0; nLootSlots < (int)pLoot->NumOfSlots; nLootSlots++)
 						{
 							if (PCONTENTS pContents = pLoot->pInventoryArray->InventoryArray[nLootSlots])
 							{
