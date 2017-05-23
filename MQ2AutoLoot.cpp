@@ -583,7 +583,14 @@ PLUGIN_API VOID OnPulse(VOID)
 								DestroyID = pPersonalItem->ItemID;
 								DestroyStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(10);
 							}
-							if (pPersonalItem->NoDrop) { LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(1000); } // Adding a delay to click accept on no drop items, TODO verify this time works
+							if (pPersonalItem->NoDrop) // Adding a 1 second delay to click accept on no drop items
+							{
+								LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(1000); 
+							} 
+							else // Adding a small delay for regular items of 0.2 seconds
+							{
+								LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+							}
 							if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: PList: Setting \ag%s\ax to loot", pPersonalItem->Name); }
 							LONG LootInd = k + 1;
 							sprintf_s(Command, "/advloot personal %d loot", LootInd);
@@ -592,6 +599,7 @@ PLUGIN_API VOID OnPulse(VOID)
 						}
 						else if (!_stricmp(pParsedValue, "Ignore"))
 						{
+							LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
 							if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: PList: Setting \ag%s\ax to leave", pPersonalItem->Name); }
 							LONG LootInd = k + 1;
 							sprintf_s(Command, "/advloot personal %d leave", LootInd);
@@ -873,6 +881,7 @@ PLUGIN_API VOID OnPulse(VOID)
 								{
 									//I want and am the master looter
 									if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Giving \ag%s\ax to me", pShareItem->Name); }
+									LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
 									LONG LootInd = k + 1;
 									sprintf_s(Command, "/advloot shared %d giveto %s", LootInd, MyName);
 									DoCommand(GetCharInfo()->pSpawn, Command);
@@ -882,6 +891,7 @@ PLUGIN_API VOID OnPulse(VOID)
 								{
 									//I want and i am not the master looter
 									if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Setting \ag%s\ax to need", pShareItem->Name); }
+									LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
 									LONG LootInd = k + 1;
 									sprintf_s(Command, "/advloot shared %d nd", LootInd);
 									DoCommand(GetCharInfo()->pSpawn, Command);
@@ -891,6 +901,7 @@ PLUGIN_API VOID OnPulse(VOID)
 								{
 									//I don't want and am the master looter
 									if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Setting \ag%s\ax to leave", pShareItem->Name); }
+									LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
 									LONG LootInd = k + 1;
 									sprintf_s(Command, "/advloot shared %d leave", LootInd);
 									DoCommand(GetCharInfo()->pSpawn, Command);
@@ -900,6 +911,7 @@ PLUGIN_API VOID OnPulse(VOID)
 								{
 									//I don't want and i am not the master looter
 									if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Setting \ag%s\ax to no", pShareItem->Name); }
+									LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
 									LONG LootInd = k + 1;
 									sprintf_s(Command, "/advloot shared %d no", LootInd);
 									DoCommand(GetCharInfo()->pSpawn, Command);
@@ -926,6 +938,7 @@ PLUGIN_API VOID OnPulse(VOID)
 											{
 												// Had 6 in the group and no one wanted the item
 												if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: No one wanted \ag%s\ax setting to leave", pShareItem->Name); }
+												LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
 												LONG LootInd = k + 1;
 												sprintf_s(Command, "/advloot shared %d leave", LootInd);
 												DoCommand(GetCharInfo()->pSpawn, Command);
@@ -946,6 +959,7 @@ PLUGIN_API VOID OnPulse(VOID)
 													{
 														GetCXStr(pChar->pGroupInfo->pMember[DistributeI]->pName, DistributeName, MAX_STRING);
 														//Attempting to give to someone in my group
+														LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
 														if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Attempting to give \ag%s\ax to \ag%s\ax", pShareItem->Name, DistributeName); }
 														LONG LootInd = k + 1;
 														sprintf_s(Command, "/advloot shared %d giveto %s", LootInd, DistributeName);
@@ -958,6 +972,7 @@ PLUGIN_API VOID OnPulse(VOID)
 											{
 												// Had less then 6 in the group and no one wanted the item
 												if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: No one wanted \ag%s\ax setting to leave", pShareItem->Name); }
+												LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
 												LONG LootInd = k + 1;
 												sprintf_s(Command, "/advloot shared %d leave", LootInd);
 												DoCommand(GetCharInfo()->pSpawn, Command);
