@@ -1,12 +1,12 @@
 // MQ2AutoLoot.cpp : Defines the entry point for the DLL application.
+//Author: Plure
 //
-
 // PLUGIN_API is only to be used for callbacks.  All existing callbacks at this time
 // are shown below. Remove the ones your plugin does not use.  Always use Initialize
 // and Shutdown for setup and cleanup, do NOT do it in DllMain.
 
 #define PLUGIN_NAME					"MQ2AutoLoot"                // Plugin Name
-#define VERSION						1.00
+#define VERSION						1.01
 #define	PLUGIN_MSG					"\ag[MQ2AutoLoot]\ax "     
 #define PERSONALBANKER_CLASS		40
 #define MERCHANT_CLASS				41
@@ -22,16 +22,10 @@ PLUGIN_VERSION(VERSION);
 
 
 //MoveUtils 11.x
-PLUGIN_API bool bMULoaded = false;
-bool bMUPointers = false;
 bool* pbStickOn;
 void(*fStickCommand)(PSPAWNINFO pChar, char* szLine);
-//MQ2EqBC shit
-//PLUGIN_API bool bEQBCLoaded = false;
-//bool bEQBCPointers = false;
-//bool* pbEQBCNames;
-
-
+//MQ2EQBC shit
+bool(*fAreTheyConnected)(char* szName);
 
 // Variables that are setable through the /AutoLoot command
 LONG				UseAutoLoot = 1;
@@ -46,14 +40,15 @@ CHAR				LootINI[MAX_STRING];
 CHAR				ExcludedBag1[MAX_STRING];
 CHAR				ExcludedBag2[MAX_STRING];
 // Variables that are used within the plugin, but not setable 
-BOOL				Initialized = false;
-BOOL				StartCursorTimer = true;  // 
-BOOL				StartDistributeLootTimer = true;  // 
-BOOL				StartLootStuff = false; // When set true will call DoLootStuff
-BOOL				StartMoveToTarget = false; // Will move to target (banker/merchant) when set to true
-BOOL				StartToOpenWindow = false; // Will move to target (banker/merchant) when set to true
-BOOL				StarBarterTimer = false; // Will start the barter timer when set to true
-BOOL				LootStuffWindowOpen = false; // Will be set true the first time the merchant/barter/banker window is open and will stop you from reopening the window a second time
+bool				Initialized = false;
+bool				CheckedAutoLootAll = false;  // used to heck if Auto Loot All is checks
+bool				StartCursorTimer = true;  // 
+bool				StartDistributeLootTimer = true;  // 
+bool				StartLootStuff = false; // When set true will call DoLootStuff
+bool				StartMoveToTarget = false; // Will move to target (banker/merchant) when set to true
+bool				StartToOpenWindow = false; // Will move to target (banker/merchant) when set to true
+bool				StarBarterTimer = false; // Will start the barter timer when set to true
+bool				LootStuffWindowOpen = false; // Will be set true the first time the merchant/barter/banker window is open and will stop you from reopening the window a second time
 LONG				DistributeI; //Index for looping over people in the group to try and distribute an item 
 LONG				DistributeK;  // Index for the item to be distributed
 LONG				LootStuffN;  //
@@ -61,6 +56,7 @@ LONG				BarterIndex;  //
 DWORD				DestroyID;
 DWORD				CursorItemID;
 DWORD				DistributeItemID;
+CHAR				szTemp[MAX_STRING];
 CHAR				Command[MAX_STRING];
 CHAR				LootStuffAction[MAX_STRING];
 std::chrono::high_resolution_clock::time_point	LootTimer = std::chrono::high_resolution_clock::now();
@@ -74,9 +70,10 @@ std::chrono::high_resolution_clock::time_point	LootStuffCancelTimer = std::chron
 // Functions to be called
 PMQPLUGIN Plugin(char* PluginName); 
 bool HandleMoveUtils(void);  // Used to connect to MQ2MoveUtils
-BOOL DoIHaveSpace(CHAR* pszItemName, DWORD plMaxStackSize, DWORD pdStackSize);
-BOOL FitInInventory(DWORD pdItemSize);
-BOOL FitInBank(DWORD pdItemSize);
+bool HandleEQBC(void);  // Used to get EQBC Names
+bool DoIHaveSpace(CHAR* pszItemName, DWORD plMaxStackSize, DWORD pdStackSize);
+bool FitInInventory(DWORD pdItemSize);
+bool FitInBank(DWORD pdItemSize);
 LONG SetBOOL(long Cur, PCHAR Val, PCHAR Sec = "", PCHAR Key = "", PCHAR INI = "");
 int CheckIfItemIsLoreByID(int ItemID);
 DWORD FindItemCount(CHAR* pszItemName);
@@ -92,13 +89,13 @@ void CreateLootINI(void);
 
 #pragma region Inlines
 // Returns TRUE if character is in game and has valid character data structures
-inline BOOL InGameOK()
+inline bool InGameOK()
 {
 	return(GetGameState() == GAMESTATE_INGAME && GetCharInfo() && GetCharInfo()->pSpawn && GetCharInfo2());
 }
 
 // Returns TRUE if the specified UI window is visible
-inline BOOL WinState(CXWnd *Wnd)
+inline bool WinState(CXWnd *Wnd)
 {
 	return (Wnd && ((PCSIDLWND)Wnd)->dShow);
 }
@@ -347,10 +344,10 @@ PLUGIN_API VOID OnPulse(VOID)
 	if (!InGameOK()) return;
 	PCHARINFO pChar = GetCharInfo();
 	PCHARINFO2 pChar2 = GetCharInfo2();
-	if (!UseAutoLoot) return;
+	if (!UseAutoLoot || !pChar->UseAdvancedLooting) return;
 
 	//check cursor for items, and will put in inventory if it fits after CursorDelay has been exceed
-	BOOL ItemOnCursor = false;
+	bool ItemOnCursor = false;
 	if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
 	{
 		if (PCONTENTS pItem = pChar2->pInventoryArray->Inventory.Cursor)
@@ -441,17 +438,29 @@ PLUGIN_API VOID OnPulse(VOID)
 			}
 		}
 	}
-
-	//if (PEQTRADEWINDOW pTrade = (PEQTRADEWINDOW)pTradeWnd)
-	//{
-	//	if (pTrade->HisTradeReady && !pTrade->MyTradeReady && !ItemOnCursor)
-	//	{
-	//		if (CXWnd *pWndButton = pTradeWnd->GetChildItem("TRDW_Trade_Button"))
-	//		{
-	//			SendWndClick2(pWndButton, "leftmouseup");
-	//		}
-	//	}
-	//}
+	if (PEQTRADEWINDOW pTrade = (PEQTRADEWINDOW)pTradeWnd)
+	{
+		if (pTrade->HisTradeReady && !pTrade->MyTradeReady && !ItemOnCursor)
+		{
+			if (CXWnd* pTRDW_HisName = pTradeWnd->GetChildItem("TRDW_HisName"))
+			{
+				GetCXStr(pTRDW_HisName->WindowText, szTemp, MAX_STRING - 1);
+				if (szTemp[0] != '\0')
+				{
+					if (HandleEQBC())
+					{
+						if (fAreTheyConnected(szTemp))
+						{
+							if (CXWnd *pWndButton = pTradeWnd->GetChildItem("TRDW_Trade_Button"))
+							{
+								SendWndClick2(pWndButton, "leftmouseup");
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 
 	// Will be called when you use /autoloot sell|barter|deposit
 	if (StartLootStuff && std::chrono::high_resolution_clock::now() > LootStuffTimer) 
@@ -483,6 +492,33 @@ PLUGIN_API VOID OnPulse(VOID)
 	CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList;
 	CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
 	if (LootInProgress(pAdvLoot, pPersonalList, pSharedList)) return;
+
+	if (!CheckedAutoLootAll)
+	{
+		if (!WinState((CXWnd*)FindMQ2Window("LootSettingsWnd")))
+		{
+			if (CXWnd *pWndButton = pAdvancedLootWnd->GetChildItem("ADLW_LootSettingsBtn"))
+			{
+				SendWndClick2(pWndButton, "leftmouseup");
+			}
+		}
+		if (CButtonWnd *pWndButton = (CButtonWnd*)FindMQ2Window("LootSettingsWnd")->GetChildItem("LS_AutoLootAllCheckbox"))
+		{
+			if (pWndButton->bActive)
+			{
+				if (pWndButton->Checked)
+				{
+					SendWndClick2(pWndButton, "leftmouseup");
+					return;
+				}
+				else
+				{
+					DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate LootSettingsWnd close");
+					CheckedAutoLootAll = true;
+				}
+			}
+		}
+	}
 
 	CHAR DistributeName[MAX_STRING] = { 0 }; //Name of person to distribute to
 	CHAR INISection[MAX_STRING] = { 0 };
@@ -958,7 +994,8 @@ PLUGIN_API VOID Zoned(VOID)
 	DebugSpewAlways("MQ2AutoLoot::Zoned");
 }
 
-PMQPLUGIN Plugin(char* PluginName) {
+PMQPLUGIN Plugin(char* PluginName) 
+{
 	long Length = strlen(PluginName) + 1;
 	PMQPLUGIN pLook = pPlugins;
 	while (pLook && _strnicmp(PluginName, pLook->szFilename, Length)) pLook = pLook->pNext;
@@ -967,7 +1004,6 @@ PMQPLUGIN Plugin(char* PluginName) {
 
 bool HandleMoveUtils(void)
 {
-	bMUPointers = false;
 	fStickCommand = NULL;
 	pbStickOn = NULL;
 	if (PMQPLUGIN pLook = Plugin("mq2moveutils"))
@@ -977,7 +1013,29 @@ bool HandleMoveUtils(void)
 	}
 	if (fStickCommand && pbStickOn)
 	{
-		bMUPointers = true;
+		return true;
+	}
+	return false;
+}
+
+bool HandleEQBC(void)
+{
+	unsigned short sEQBCConnected = 0;
+	bool bEQBCLoaded = false;
+	unsigned short(*fisConnected)() = NULL;
+	fAreTheyConnected = NULL;
+	if (PMQPLUGIN pLook = Plugin("mq2eqbc"))
+	{
+		fisConnected = (unsigned short(*)())GetProcAddress(pLook->hModule, "isConnected");
+		fAreTheyConnected = (bool(*)(char* szName))GetProcAddress(pLook->hModule, "AreTheyConnected");
+		bEQBCLoaded = true;
+	}
+	if (fisConnected && bEQBCLoaded)
+	{
+		sEQBCConnected = fisConnected();
+	}
+	if (fisConnected && fAreTheyConnected && sEQBCConnected && bEQBCLoaded)
+	{
 		return true;
 	}
 	return false;
@@ -1005,9 +1063,9 @@ LONG SetBOOL(long Cur, PCHAR Val, PCHAR Sec, PCHAR Key, PCHAR INI)
 	return result;
 }
 
-BOOL DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize)
+bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize)
 {
-	BOOL FitInStack = false;
+	bool FitInStack = false;
 	LONG nPack = 0;
 	LONG Count = 0;
 	PCHARINFO pCharInfo = GetCharInfo();
@@ -1102,9 +1160,9 @@ BOOL DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize)
 	return false;
 }
 
-BOOL FitInInventory(DWORD pdItemSize)
+bool FitInInventory(DWORD pdItemSize)
 {
-	BOOL FitInStack = false;
+	bool FitInStack = false;
 	LONG nPack = 0;
 	LONG Count = 0;
 	PCHARINFO pCharInfo = GetCharInfo();
@@ -1165,9 +1223,9 @@ BOOL FitInInventory(DWORD pdItemSize)
 	return false;
 }
 
-BOOL FitInBank(DWORD pdItemSize)
+bool FitInBank(DWORD pdItemSize)
 {
-	BOOL FitInStack = false;
+	bool FitInStack = false;
 	LONG nPack = 0;
 	LONG Count = 0;
 	PCHARINFO pCharInfo = GetCharInfo();
@@ -2122,11 +2180,7 @@ void DoLootStuff(CHAR* szAction)
 					{
 						StartMoveToTarget = false;
 						LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(30000); // Will stop trying to move to within range of the banker/merchant after 30 seconds
-						if (!bMULoaded || !bMUPointers)
-						{
-							bMULoaded = HandleMoveUtils();
-						}
-						if (bMULoaded && bMUPointers)
+						if (HandleMoveUtils())
 						{
 							sprintf_s(Command, "id %d", psTarget->SpawnID);
 							fStickCommand(GetCharInfo()->pSpawn, Command);
@@ -2146,11 +2200,7 @@ void DoLootStuff(CHAR* szAction)
 				{
 					if (StartToOpenWindow)
 					{
-						if (!bMULoaded || !bMUPointers)
-						{
-							bMULoaded = HandleMoveUtils();
-						}
-						if (bMULoaded && bMUPointers)
+						if (HandleMoveUtils())
 						{
 							if (*pbStickOn)
 							{
