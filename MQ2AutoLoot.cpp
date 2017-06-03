@@ -19,7 +19,7 @@ PLUGIN_VERSION(VERSION);
 #endif PLUGIN_API
 
 #include <chrono>
-
+typedef std::chrono::high_resolution_clock pluginclock;
 
 //MoveUtils 11.x
 bool* pbStickOn;
@@ -28,44 +28,45 @@ void(*fStickCommand)(PSPAWNINFO pChar, char* szLine);
 bool(*fAreTheyConnected)(char* szName);
 
 // Variables that are setable through the /AutoLoot command
-LONG				UseAutoLoot = 1;
-LONG				SpamLootInfo = 1;
-LONG				CursorDelay = 10;
-LONG				DistributeLootDelay = 5;
-LONG				SaveBagSlots = 0;
-LONG				QuestKeep = 0;
-LONG				BarMinSellPrice = 1;
-CHAR				NoDropDefault[MAX_STRING];
-CHAR				LootINI[MAX_STRING];
-CHAR				ExcludedBag1[MAX_STRING];
-CHAR				ExcludedBag2[MAX_STRING];
+LONG					UseAutoLoot = 1;
+LONG					SpamLootInfo = 1;
+LONG					CursorDelay = 10;
+LONG					DistributeLootDelay = 5;
+LONG					SaveBagSlots = 0;
+LONG					QuestKeep = 0;
+LONG					BarMinSellPrice = 1;
+CHAR					NoDropDefault[MAX_STRING];
+CHAR					LootINI[MAX_STRING];
+CHAR					ExcludedBag1[MAX_STRING];
+CHAR					ExcludedBag2[MAX_STRING];
 // Variables that are used within the plugin, but not setable 
-bool				Initialized = false;
-bool				CheckedAutoLootAll = false;  // used to heck if Auto Loot All is checks
-bool				StartCursorTimer = true;  // 
-bool				StartDistributeLootTimer = true;  // 
-bool				StartLootStuff = false; // When set true will call DoLootStuff
-bool				StartMoveToTarget = false; // Will move to target (banker/merchant) when set to true
-bool				StartToOpenWindow = false; // Will move to target (banker/merchant) when set to true
-bool				StarBarterTimer = false; // Will start the barter timer when set to true
-bool				LootStuffWindowOpen = false; // Will be set true the first time the merchant/barter/banker window is open and will stop you from reopening the window a second time
-LONG				DistributeI; //Index for looping over people in the group to try and distribute an item 
-LONG				DistributeK;  // Index for the item to be distributed
-LONG				LootStuffN;  //
-LONG				BarterIndex;  //
-DWORD				DestroyID;
-DWORD				CursorItemID;
-DWORD				DistributeItemID;
-CHAR				szTemp[MAX_STRING];
-CHAR				Command[MAX_STRING];
-CHAR				LootStuffAction[MAX_STRING];
-std::chrono::high_resolution_clock::time_point	LootTimer = std::chrono::high_resolution_clock::now();
-std::chrono::high_resolution_clock::time_point	CursorTimer = std::chrono::high_resolution_clock::now();
-std::chrono::high_resolution_clock::time_point	DistributeLootTimer = std::chrono::high_resolution_clock::now();
-std::chrono::high_resolution_clock::time_point	DestroyStuffTimer = std::chrono::high_resolution_clock::now();
-std::chrono::high_resolution_clock::time_point	DestroyStuffCancelTimer = std::chrono::high_resolution_clock::now();
-std::chrono::high_resolution_clock::time_point	LootStuffTimer = std::chrono::high_resolution_clock::now();
-std::chrono::high_resolution_clock::time_point	LootStuffCancelTimer = std::chrono::high_resolution_clock::now();
+bool					Initialized = false;
+bool					CheckedAutoLootAll = false;  // used to heck if Auto Loot All is checks
+bool					StartCursorTimer = true;  // 
+bool					StartDistributeLootTimer = true;  // 
+bool					StartLootStuff = false; // When set true will call DoLootStuff
+bool					StartMoveToTarget = false; // Will move to target (banker/merchant) when set to true
+bool					StartToOpenWindow = false; // Will move to target (banker/merchant) when set to true
+bool					StartLootStuffTimer = false; // Will start the LootStuff timer when set to true
+bool					StarBarterTimer = false; // Will start the barter timer when set to true
+bool					LootStuffWindowOpen = false; // Will be set true the first time the merchant/barter/banker window is open and will stop you from reopening the window a second time
+LONG					DistributeI; //Index for looping over people in the group to try and distribute an item 
+LONG					DistributeK;  // Index for the item to be distributed
+LONG					LootStuffN;  //
+LONG					BarterIndex;  //
+DWORD					DestroyID;
+DWORD					CursorItemID;
+DWORD					DistributeItemID;
+CHAR					szTemp[MAX_STRING];
+CHAR					Command[MAX_STRING];
+CHAR					LootStuffAction[MAX_STRING];
+pluginclock::time_point	LootTimer = pluginclock::now();
+pluginclock::time_point	CursorTimer = pluginclock::now();
+pluginclock::time_point	DistributeLootTimer = pluginclock::now();
+pluginclock::time_point	DestroyStuffTimer = pluginclock::now();
+pluginclock::time_point	DestroyStuffCancelTimer = pluginclock::now();
+pluginclock::time_point	LootStuffTimer = pluginclock::now();
+pluginclock::time_point	LootStuffCancelTimer = pluginclock::now();
 
 // Functions to be called
 PMQPLUGIN Plugin(char* PluginName); 
@@ -235,35 +236,35 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 				sprintf_s(MerchantText, "%s says, 'Hi there, %s. Just browsing?  Have you seen the ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
 				if (strstr(Line, MerchantText))
 				{
-					LootStuffTimer = std::chrono::high_resolution_clock::now();
-					LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::minutes(20); // Will stop trying to move to open the merchant/banker window after 20 minutes
+					LootStuffTimer = pluginclock::now();
+					LootStuffCancelTimer = pluginclock::now() + std::chrono::minutes(20); // Will stop trying to move to open the merchant/banker window after 20 minutes
 					return(0);
 				}
 				sprintf_s(MerchantText, "%s says, 'Welcome to my shop, %s. You would probably find a ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
 				if (strstr(Line, MerchantText))
 				{
-					LootStuffTimer = std::chrono::high_resolution_clock::now();
-					LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::minutes(20); // Will stop trying to move to open the merchant/banker window after 20 minutes
+					LootStuffTimer = pluginclock::now();
+					LootStuffCancelTimer = pluginclock::now() + std::chrono::minutes(20); // Will stop trying to move to open the merchant/banker window after 20 minutes
 					return(0);
 				}
 				sprintf_s(MerchantText, "%s says, 'Hello there, %s. How about a nice ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
 				if (strstr(Line, MerchantText))
 				{
-					LootStuffTimer = std::chrono::high_resolution_clock::now();
-					LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::minutes(20); // Will stop trying to move to open the merchant/banker window after 20 minutes
+					LootStuffTimer = pluginclock::now();
+					LootStuffCancelTimer = pluginclock::now() + std::chrono::minutes(20); // Will stop trying to move to open the merchant/banker window after 20 minutes
 					return(0);
 				}
 				sprintf_s(MerchantText, "%s says, 'Greetings, %s. You look like you could use a ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
 				if (strstr(Line, MerchantText))
 				{
-					LootStuffTimer = std::chrono::high_resolution_clock::now();
-					LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::minutes(20); // Will stop trying to move to open the merchant/banker window after 20 minutes
+					LootStuffTimer = pluginclock::now();
+					LootStuffCancelTimer = pluginclock::now() + std::chrono::minutes(20); // Will stop trying to move to open the merchant/banker window after 20 minutes
 					return(0);
 				}
 				sprintf_s(MerchantText, "%s tells you, 'I'll give you ", MerchantName);  // Confirmed 04/15/2017
 				if (strstr(Line, MerchantText))
 				{
-					LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+					LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 					return(0);
 				}
 				sprintf_s(MerchantText, "You receive");  // Confirmed 04/15/2017
@@ -275,7 +276,7 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 						sprintf_s(MerchantText, "(s)");  // Confirmed 04/15/2017
 						if (PCHAR pItemEnd = strstr(Line, MerchantText))
 						{
-							LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+							LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 							return(0);
 						}
 					}
@@ -288,8 +289,8 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 	sprintf_s(BankerText, "tells you, 'Welcome to my bank!"); // Confirmed 04/21/2017
 	if (strstr(Line, BankerText))
 	{
-		LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(2); // Will start trying to deposit items are a 2 second delay
-		LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::minutes(20); // Will stop trying to deposit items after 20 minutes
+		LootStuffTimer = pluginclock::now() + std::chrono::seconds(2); // Will start trying to deposit items are a 2 second delay
+		LootStuffCancelTimer = pluginclock::now() + std::chrono::minutes(20); // Will stop trying to deposit items after 20 minutes
 		return(0);
 	}
 
@@ -307,7 +308,7 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 				{
 					//WriteChatf(PLUGIN_MSG ":: OMG i searched shit");
 					LootStuffN = 3;
-					LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(500);
+					LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(500);
 					return(0);
 				}
 			}
@@ -322,7 +323,7 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 				if (PCHAR pItemEnd = strstr(Line, BarterText))
 				{
 					//WriteChatf(PLUGIN_MSG ":: OMG i sold shit");
-					LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+					LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 					return(0);
 				}
 			}
@@ -359,14 +360,14 @@ PLUGIN_API VOID OnPulse(VOID)
 				{
 					StartCursorTimer = false;
 					CursorItemID = pItem->ID;
-					CursorTimer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(CursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
+					CursorTimer = pluginclock::now() + std::chrono::seconds(CursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
 				}
 				else if (CursorItemID != pItem->ID) // You changed items on your cursor, time to reset CursorItemID and CursorTimer
 				{
 					CursorItemID = pItem->ID;
-					CursorTimer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(CursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
+					CursorTimer = pluginclock::now() + std::chrono::seconds(CursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
 				}
-				else if (std::chrono::high_resolution_clock::now() > CursorTimer)  // Waited CursorDelay, now going to see if you have room to autoinventory the item on your cursor
+				else if (pluginclock::now() > CursorTimer)  // Waited CursorDelay, now going to see if you have room to autoinventory the item on your cursor
 				{
 					if (FitInInventory(pItem->Item2->Size))
 					{
@@ -438,6 +439,7 @@ PLUGIN_API VOID OnPulse(VOID)
 			}
 		}
 	}
+
 	if (PEQTRADEWINDOW pTrade = (PEQTRADEWINDOW)pTradeWnd)
 	{
 		if (pTrade->HisTradeReady && !pTrade->MyTradeReady && !ItemOnCursor)
@@ -463,7 +465,7 @@ PLUGIN_API VOID OnPulse(VOID)
 	}
 
 	// Will be called when you use /autoloot sell|barter|deposit
-	if (StartLootStuff && std::chrono::high_resolution_clock::now() > LootStuffTimer) 
+	if (StartLootStuff && pluginclock::now() > LootStuffTimer) 
 	{ 
 		if (!_stricmp(LootStuffAction, "Barter"))
 		{
@@ -478,7 +480,7 @@ PLUGIN_API VOID OnPulse(VOID)
 	// When you loot an item marked Destroy it will set the DestroyID to that item's ID and proceed to pick that item from inventory and destroy before resetting DestroyID to 0
 	if (DestroyID)
 	{
-		if (std::chrono::high_resolution_clock::now() > DestroyStuffTimer)
+		if (pluginclock::now() > DestroyStuffTimer)
 		{
 			DestroyStuff();
 		}
@@ -487,7 +489,7 @@ PLUGIN_API VOID OnPulse(VOID)
 
 	if (!WinState((CXWnd*)pAdvancedLootWnd)) return;
 	PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd;
-	if (!pAdvLoot || std::chrono::high_resolution_clock::now() < LootTimer) return;
+	if (!pAdvLoot || pluginclock::now() < LootTimer) return;
 
 	CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList;
 	CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
@@ -566,6 +568,7 @@ PLUGIN_API VOID OnPulse(VOID)
 					}
 					else
 					{
+						if (LootInProgress(pAdvLoot, pPersonalList, pSharedList)) return;
 						CHAR *pParsedToken = NULL;
 						CHAR *pParsedValue = strtok_s(Value, "|", &pParsedToken);
 						if (!_stricmp(pParsedValue, "Keep") || !_stricmp(pParsedValue, "Sell") || !_stricmp(pParsedValue, "Deposit") || !_stricmp(pParsedValue, "Barter") || !_stricmp(pParsedValue, "Quest") || !_stricmp(pParsedValue, "Gear") || !_stricmp(Value, "Destroy"))
@@ -581,15 +584,15 @@ PLUGIN_API VOID OnPulse(VOID)
 							if (!_stricmp(Value, "Destroy"))
 							{
 								DestroyID = pPersonalItem->ItemID;
-								DestroyStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(10);
+								DestroyStuffCancelTimer = pluginclock::now() + std::chrono::seconds(10);
 							}
 							if (pPersonalItem->NoDrop) // Adding a 1 second delay to click accept on no drop items
 							{
-								LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(1000); 
+								LootTimer = pluginclock::now() + std::chrono::milliseconds(1000); 
 							} 
 							else // Adding a small delay for regular items of 0.2 seconds
 							{
-								LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+								LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 							}
 							if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: PList: Setting \ag%s\ax to loot", pPersonalItem->Name); }
 							LONG LootInd = k + 1;
@@ -599,7 +602,7 @@ PLUGIN_API VOID OnPulse(VOID)
 						}
 						else if (!_stricmp(pParsedValue, "Ignore"))
 						{
-							LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+							LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 							if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: PList: Setting \ag%s\ax to leave", pPersonalItem->Name); }
 							LONG LootInd = k + 1;
 							sprintf_s(Command, "/advloot personal %d leave", LootInd);
@@ -662,7 +665,7 @@ PLUGIN_API VOID OnPulse(VOID)
 						WriteChatf(PLUGIN_MSG ":: I am setting myself to master looter");
 						sprintf_s(Command, "/grouproles set %s 5", MyName);
 						DoCommand(GetCharInfo()->pSpawn, Command);
-						LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(5);  //Two seconds was too short, it attempts to set masterlooter a second time.  Setting to 5 seconds that should fix this
+						LootTimer = pluginclock::now() + std::chrono::seconds(5);  //Two seconds was too short, it attempts to set masterlooter a second time.  Setting to 5 seconds that should fix this
 						return;
 					}
 				}
@@ -877,11 +880,12 @@ PLUGIN_API VOID OnPulse(VOID)
 										return;
 									}
 								}
+								if (LootInProgress(pAdvLoot, pPersonalList, pSharedList)) return;
 								if (IWant && pChar->pGroupInfo->pMember[0]->MasterLooter)
 								{
-									//I want and am the master looter
+									//I want and I am the master looter
 									if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Giving \ag%s\ax to me", pShareItem->Name); }
-									LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+									LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 									LONG LootInd = k + 1;
 									sprintf_s(Command, "/advloot shared %d giveto %s", LootInd, MyName);
 									DoCommand(GetCharInfo()->pSpawn, Command);
@@ -891,7 +895,7 @@ PLUGIN_API VOID OnPulse(VOID)
 								{
 									//I want and i am not the master looter
 									if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Setting \ag%s\ax to need", pShareItem->Name); }
-									LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+									LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 									LONG LootInd = k + 1;
 									sprintf_s(Command, "/advloot shared %d nd", LootInd);
 									DoCommand(GetCharInfo()->pSpawn, Command);
@@ -901,7 +905,7 @@ PLUGIN_API VOID OnPulse(VOID)
 								{
 									//I don't want and am the master looter
 									if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Setting \ag%s\ax to leave", pShareItem->Name); }
-									LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+									LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 									LONG LootInd = k + 1;
 									sprintf_s(Command, "/advloot shared %d leave", LootInd);
 									DoCommand(GetCharInfo()->pSpawn, Command);
@@ -911,7 +915,7 @@ PLUGIN_API VOID OnPulse(VOID)
 								{
 									//I don't want and i am not the master looter
 									if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Setting \ag%s\ax to no", pShareItem->Name); }
-									LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+									LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 									LONG LootInd = k + 1;
 									sprintf_s(Command, "/advloot shared %d no", LootInd);
 									DoCommand(GetCharInfo()->pSpawn, Command);
@@ -923,12 +927,12 @@ PLUGIN_API VOID OnPulse(VOID)
 									{
 										if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Setting the DistributeLootTimer"); }
 										StartDistributeLootTimer = false;
-										DistributeLootTimer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(DistributeLootDelay);
+										DistributeLootTimer = pluginclock::now() + std::chrono::seconds(DistributeLootDelay);
 										DistributeItemID = pShareItem->ItemID;
 										DistributeI = 0;
 										DistributeK = k;
 									}
-									else if (std::chrono::high_resolution_clock::now() > DistributeLootTimer)
+									else if (pluginclock::now() > DistributeLootTimer)
 									{
 										if (pChar->pGroupInfo)
 										{
@@ -938,7 +942,7 @@ PLUGIN_API VOID OnPulse(VOID)
 											{
 												// Had 6 in the group and no one wanted the item
 												if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: No one wanted \ag%s\ax setting to leave", pShareItem->Name); }
-												LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+												LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 												LONG LootInd = k + 1;
 												sprintf_s(Command, "/advloot shared %d leave", LootInd);
 												DoCommand(GetCharInfo()->pSpawn, Command);
@@ -959,7 +963,7 @@ PLUGIN_API VOID OnPulse(VOID)
 													{
 														GetCXStr(pChar->pGroupInfo->pMember[DistributeI]->pName, DistributeName, MAX_STRING);
 														//Attempting to give to someone in my group
-														LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+														LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 														if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: Attempting to give \ag%s\ax to \ag%s\ax", pShareItem->Name, DistributeName); }
 														LONG LootInd = k + 1;
 														sprintf_s(Command, "/advloot shared %d giveto %s", LootInd, DistributeName);
@@ -972,7 +976,7 @@ PLUGIN_API VOID OnPulse(VOID)
 											{
 												// Had less then 6 in the group and no one wanted the item
 												if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: No one wanted \ag%s\ax setting to leave", pShareItem->Name); }
-												LootTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(200);
+												LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 												LONG LootInd = k + 1;
 												sprintf_s(Command, "/advloot shared %d leave", LootInd);
 												DoCommand(GetCharInfo()->pSpawn, Command);
@@ -1785,7 +1789,7 @@ void DoBarterStuff(CHAR* szAction)
 	PCHARINFO pChar = GetCharInfo();
 	PCHARINFO2 pChar2 = GetCharInfo2();
 	// This will keep parts of the DoBarterStuff from getting stuck, it is given 30 seconds to open the barter window and then 20 minutes to finish bartering your stuff 
-	if (std::chrono::high_resolution_clock::now() > LootStuffCancelTimer)
+	if (pluginclock::now() > LootStuffCancelTimer)
 	{
 		WriteChatf(PLUGIN_MSG ":: Barter timer ran out, terminating the bartering of your items.");
 		StartLootStuff = false;
@@ -1809,10 +1813,10 @@ void DoBarterStuff(CHAR* szAction)
 			{
 				StartToOpenWindow = false;
 				DoCommand(GetCharInfo()->pSpawn, "/barter");
-				LootStuffCancelTimer = std::chrono::high_resolution_clock::now() +  + std::chrono::seconds(30);; // Will stop trying to move to open the merchant/banker window after 30 seconds
+				LootStuffCancelTimer = pluginclock::now() +  + std::chrono::seconds(30);; // Will stop trying to move to open the merchant/banker window after 30 seconds
 				WriteChatf(PLUGIN_MSG ":: Opening a barter window!");
 			}
-			LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::seconds(5);
+			LootStuffTimer = pluginclock::now() + std::chrono::seconds(5);
 			return;
 		}
 	}
@@ -1830,7 +1834,7 @@ void DoBarterStuff(CHAR* szAction)
 		LootStuffWindowOpen = true;
 		if (StarBarterTimer)
 		{
-			LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::minutes(20); // Will stop trying to barter items after 20 minutes
+			LootStuffCancelTimer = pluginclock::now() + std::chrono::minutes(20); // Will stop trying to barter items after 20 minutes
 			StarBarterTimer = false;
 		}
 		if (CListWnd *cLWnd = (CListWnd *)FindMQ2Window("BarterSearchWnd")->GetChildItem("BTRSRCH_InventoryList"))
@@ -1881,7 +1885,7 @@ void DoBarterStuff(CHAR* szAction)
 									WriteChatf(PLUGIN_MSG ":: For entry %i, the item's name is %s and I will sell for: %d platinum", nBarterItems + 1, szItemName, MyBarterMinimum);
 									sprintf_s(Command, "/nomodkey /notify BarterSearchWnd BTRSRCH_InventoryList listselect %i", nBarterItems+1);
 									DoCommand(GetCharInfo()->pSpawn, Command);
-									LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(1000);
+									LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(1000);
 									LootStuffN = 2;
 									return;
 								}
@@ -1894,7 +1898,7 @@ void DoBarterStuff(CHAR* szAction)
 											if (pWndButton->Enabled)
 											{
 												SendWndClick2(pWndButton, "leftmouseup");
-												LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(5000);
+												LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(5000);
 												return;
 											}
 										}
@@ -1940,14 +1944,14 @@ void DoBarterStuff(CHAR* szAction)
 											if (cLWnd->GetCurSel() != BarterMaximumIndex) 
 											{
 												cLWnd->SetCurSel(BarterMaximumIndex);
-												LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+												LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 												return;
 											}
 											else
 											{
 												sprintf_s(Command, "/nomodkey /notify BarterSearchWnd SellButton leftmouseup");
 												DoCommand(GetCharInfo()->pSpawn, Command);
-												LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(0);
+												LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(0);
 												LootStuffN = 4;
 												return;
 											}
@@ -2024,7 +2028,7 @@ void DoBarterStuff(CHAR* szAction)
 												}
 												sprintf_s(Command, "/nomodkey /notify QuantityWnd QTYW_slider newvalue %i", SellCount);
 												DoCommand(GetCharInfo()->pSpawn, Command);
-												LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(0);
+												LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(0);
 												LootStuffN = 5;
 												return;
 											}
@@ -2041,7 +2045,7 @@ void DoBarterStuff(CHAR* szAction)
 										{
 											WriteChatf(PLUGIN_MSG ":: Selling %s", szItemName);
 											SendWndClick2(pWndButton, "leftmouseup");
-											LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(10000);
+											LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(10000);
 											LootStuffN = 3;
 											return;
 										}
@@ -2083,7 +2087,7 @@ void DestroyStuff()
 {
 	PCHARINFO pChar = GetCharInfo();
 	PCHARINFO2 pChar2 = GetCharInfo2();
-	if (std::chrono::high_resolution_clock::now() > DestroyStuffCancelTimer)
+	if (pluginclock::now() > DestroyStuffCancelTimer)
 	{
 		if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: Destroying timer ran out, moving on!"); }
 		DestroyID = 0;
@@ -2113,7 +2117,7 @@ void DestroyStuff()
 				{
 					sprintf_s(Command, "/nomodkey /itemnotify \"%s\" leftmouseup", pItem->Item2->Name);
 					DoCommand(GetCharInfo()->pSpawn, Command);
-					DestroyStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+					DestroyStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 					return;
 				}
 			}
@@ -2137,7 +2141,7 @@ void DestroyStuff()
 								{
 									sprintf_s(Command, "/nomodkey /itemnotify \"%s\" leftmouseup", pItem->Item2->Name);
 									DoCommand(GetCharInfo()->pSpawn, Command);
-									DestroyStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+									DestroyStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 									return;
 								}
 							}
@@ -2158,7 +2162,7 @@ void DoLootStuff(CHAR* szAction)
 	PCHARINFO2 pChar2 = GetCharInfo2();
 	// This will keep parts of the DoLootStuff from looping forever if they get stuck at some step 
 	// For depositing/selling you have 30 seconds to move within range, then another 30 seconds to open the window, and finally 20 minutes to finish all of your selling/depositing
-	if (std::chrono::high_resolution_clock::now() > LootStuffCancelTimer)
+	if (pluginclock::now() > LootStuffCancelTimer)
 	{
 		if (!_stricmp(szAction, "Deposit")) { WriteChatf(PLUGIN_MSG ":: Deposit timer ran out, terminating the depositing of your items."); }
 		if (!_stricmp(szAction, "Sell")) { WriteChatf(PLUGIN_MSG ":: Sell timer ran out, terminating the selling of your items."); }
@@ -2194,7 +2198,7 @@ void DoLootStuff(CHAR* szAction)
 					if (StartMoveToTarget)
 					{
 						StartMoveToTarget = false;
-						LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(30000); // Will stop trying to move to within range of the banker/merchant after 30 seconds
+						LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000); // Will stop trying to move to within range of the banker/merchant after 30 seconds
 						if (HandleMoveUtils())
 						{
 							sprintf_s(Command, "id %d", psTarget->SpawnID);
@@ -2208,7 +2212,7 @@ void DoLootStuff(CHAR* szAction)
 							return;
 						}
 					}
-					LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+					LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 					return;
 				}
 				else
@@ -2224,13 +2228,13 @@ void DoLootStuff(CHAR* szAction)
 						}
 						StartToOpenWindow = false;
 						if (!_stricmp(szAction, "Sell")) { DoCommand(GetCharInfo()->pSpawn, "/keypress OPEN_INV_BAGS"); } // Will remove this when /itemnotify works inside closed packs for merchant stuff
-						LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(30000); // Will stop trying to move to open the merchant/banker window after 30 seconds
+						LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000); // Will stop trying to move to open the merchant/banker window after 30 seconds
 						if (!_stricmp(szAction, "Deposit")) { WriteChatf(PLUGIN_MSG ":: Opening banking window and waiting for the banking window to populate"); }
 						if (!_stricmp(szAction, "Sell")) { WriteChatf(PLUGIN_MSG ":: Opening merchant window and waiting for the merchant window to populate"); }
 					}
 					DoCommand(GetCharInfo()->pSpawn, "/face nolook");
 					DoCommand(GetCharInfo()->pSpawn, "/nomodkey /click right target");
-					LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(30000);
+					LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(30000);
 					return;
 				}
 			}
@@ -2254,6 +2258,16 @@ void DoLootStuff(CHAR* szAction)
 	// Looping through the items in my inventory and seening if I want to sell/deposit them based on which window was open
 	if (WinState((CXWnd*)pMerchantWnd) || WinState((CXWnd*)pBankWnd) || WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))  // Either bank or merchant window are open
 	{
+		if (StartLootStuffTimer)
+		{
+			LootStuffCancelTimer = pluginclock::now() + std::chrono::minutes(20); // Will stop trying to sell/deposit items after 20 minutes
+			StartLootStuffTimer = false;
+		}
+		if (StartToOpenWindow && !_stricmp(szAction, "Sell"))
+		{
+			DoCommand(GetCharInfo()->pSpawn, "/keypress OPEN_INV_BAGS"); // Will remove this when /itemnotify works inside closed packs for merchant stuff
+			StartToOpenWindow = false;
+		}
 		LootStuffWindowOpen = true;
 		if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
 		{
@@ -2267,7 +2281,7 @@ void DoLootStuff(CHAR* szAction)
 						{
 							if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: Putting \ag%s\ax into my personal bank", pItem->Item2->Name); }
 							SendWndClick2(pWndButton, "leftmouseup");
-							LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+							LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 							return;
 						}
 					}
@@ -2288,7 +2302,7 @@ void DoLootStuff(CHAR* szAction)
 							{
 								if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: Putting \ag%s\ax into my guild bank", pItem->Item2->Name); }
 								SendWndClick2(pWndButton, "leftmouseup");
-								LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(2000);
+								LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(2000);
 								return;
 							}
 						}
@@ -2324,7 +2338,7 @@ void DoLootStuff(CHAR* szAction)
 									{
 										sprintf_s(Command, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
 										DoCommand(GetCharInfo()->pSpawn, Command);
-										LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+										LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 										return;
 									}
 								}
@@ -2346,7 +2360,7 @@ void DoLootStuff(CHAR* szAction)
 										{
 											sprintf_s(Command, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
 											DoCommand(GetCharInfo()->pSpawn, Command);
-											LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(2000);
+											LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(2000);
 											return;
 										}
 										else
@@ -2368,7 +2382,7 @@ void DoLootStuff(CHAR* szAction)
 										sprintf_s(Command, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
 										DoCommand(GetCharInfo()->pSpawn, Command);
 										LootStuffN = 2;
-										LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(5000);
+										LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(5000);
 										return;
 									}
 									else if (LootStuffN == 2)
@@ -2382,7 +2396,7 @@ void DoLootStuff(CHAR* szAction)
 											gShiftKeyDown = 0;
 											((PCXWNDMGR)pWndMgr)->KeyboardFlags[0] = Old;
 											LootStuffN = 1;
-											LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(5000);
+											LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(5000);
 											return;
 										}
 									}
@@ -2433,7 +2447,7 @@ void DoLootStuff(CHAR* szAction)
 														if (SpamLootInfo) { WriteChatf(PLUGIN_MSG ":: Picking up \ag%s\ax", theitem->Name); }
 														sprintf_s(Command, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
 														DoCommand(GetCharInfo()->pSpawn, Command);
-														LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(100);
+														LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(100);
 														return;
 													}
 												}
@@ -2455,7 +2469,7 @@ void DoLootStuff(CHAR* szAction)
 														{
 															sprintf_s(Command, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
 															DoCommand(GetCharInfo()->pSpawn, Command);
-															LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(2000);
+															LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(2000);
 															return;
 														}
 														else
@@ -2477,7 +2491,7 @@ void DoLootStuff(CHAR* szAction)
 														sprintf_s(Command, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
 														DoCommand(GetCharInfo()->pSpawn, Command);
 														LootStuffN = 2;
-														LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(5000);
+														LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(5000);
 														return;
 													}
 													else if (LootStuffN == 2)
@@ -2491,7 +2505,7 @@ void DoLootStuff(CHAR* szAction)
 															gShiftKeyDown = 0;
 															((PCXWNDMGR)pWndMgr)->KeyboardFlags[0] = Old;
 															LootStuffN = 1;
-															LootStuffTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(5000);
+															LootStuffTimer = pluginclock::now() + std::chrono::milliseconds(5000);
 															return;
 														}
 													}
@@ -2881,9 +2895,10 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		StartMoveToTarget = true;
 		StartToOpenWindow = true;
 		LootStuffWindowOpen = false;
+		StartLootStuffTimer = true;
 		LootStuffN = 1;
-		LootStuffTimer = std::chrono::high_resolution_clock::now();
-		LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(30000);
+		LootStuffTimer = pluginclock::now();
+		LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000);
 		sprintf_s(LootStuffAction, "Sell");
 	}
 	else if (!_stricmp(Parm1, "deposit"))
@@ -2897,9 +2912,10 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		StartMoveToTarget = true;
 		StartToOpenWindow = true;
 		LootStuffWindowOpen = false;
+		StartLootStuffTimer = true;
 		LootStuffN = 1;
-		LootStuffTimer = std::chrono::high_resolution_clock::now();
-		LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(30000);
+		LootStuffTimer = pluginclock::now();
+		LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000);
 		sprintf_s(LootStuffAction, "Deposit");
 	}
 	else if (!_stricmp(Parm1, "barter"))
@@ -2916,8 +2932,8 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		LootStuffWindowOpen = false;
 		BarterIndex = 0;
 		LootStuffN = 1;
-		LootStuffTimer = std::chrono::high_resolution_clock::now();
-		LootStuffCancelTimer = std::chrono::high_resolution_clock::now() + std::chrono::milliseconds(30000);
+		LootStuffTimer = pluginclock::now();
+		LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000);
 		sprintf_s(LootStuffAction, "Barter");
 	}
 	else if (!_stricmp(Parm1, "test"))
