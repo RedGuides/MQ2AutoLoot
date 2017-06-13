@@ -47,7 +47,6 @@ bool					StartDistributeLootTimer = true;  //
 bool					StartLootStuff = false; // When set true will call DoLootStuff
 bool					StartMoveToTarget = false; // Will move to target (banker/merchant) when set to true
 bool					StartToOpenWindow = false; // Will move to target (banker/merchant) when set to true
-bool					StartLootStuffTimer = false; // Will start the LootStuff timer when set to true
 bool					StarBarterTimer = false; // Will start the barter timer when set to true
 bool					LootStuffWindowOpen = false; // Will be set true the first time the merchant/barter/banker window is open and will stop you from reopening the window a second time
 LONG					DistributeI; //Index for looping over people in the group to try and distribute an item 
@@ -1550,12 +1549,12 @@ DWORD FindItemCount(CHAR* pszItemName)
 	LONG nPack = 0;
 	DWORD Count = 0;
 	DWORD nAug = 0;
-	PCONTENTS pPack;
+	//PCONTENTS pPack;
 	PCHARINFO pCharInfo = GetCharInfo();
 	PCHARINFO2 pChar2 = GetCharInfo2();
 	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
 	{
-		for (unsigned long nSlot = 0; nSlot < NUM_INV_SLOTS; nSlot++)
+		for (unsigned long nSlot = 0; nSlot < NUM_INV_SLOTS; nSlot++) //NUM_INV_SLOTS == 33
 		{
 			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
 			{
@@ -1568,7 +1567,7 @@ DWORD FindItemCount(CHAR* pszItemName)
 						else
 							Count += pItem->StackCount;
 					}
-					else // for augs
+					else if (theitem->Type != ITEMTYPE_PACK)// for augs
 					{
 						if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
 						{
@@ -1641,74 +1640,167 @@ DWORD FindItemCount(CHAR* pszItemName)
 			}
 		}
 	}
-	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++) //checking bank slots
+	if (pCharInfo && pCharInfo->pBankArray) //checking bank slots
 	{
-		if (pCharInfo->pBankArray && (pPack = pCharInfo->pBankArray->Bank[nPack]))
+		for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
 		{
-			if (PITEMINFO theitem = GetItemFromContents(pPack))
+			if (PCONTENTS pPack = pCharInfo->pBankArray->Bank[nPack])
 			{
-				if (!_stricmp(pszItemName, theitem->Name))
+				if (GetItemFromContents(pPack)->Type != ITEMTYPE_PACK)  //It isn't a pack! we should see if this item is what we are looking for
 				{
-					if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pPack)->IsStackable() != 1))
-						Count++;
-					else
-						Count += pPack->StackCount;
-				}
-				if (theitem->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems) //checking bank bags
-				{
-					for (unsigned long nItem = 0; nItem < theitem->Slots; nItem++)
+					if (PITEMINFO theitem = GetItemFromContents(pPack))
 					{
-						if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+						if (!_stricmp(pszItemName, theitem->Name))
 						{
-							if (PITEMINFO theitem = GetItemFromContents(pItem)) {
-								if (!_stricmp(pszItemName, theitem->Name))
+							if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pPack)->IsStackable() != 1))
+								Count++;
+							else
+								Count += pPack->StackCount;
+						}
+						else //check for augs
+						{
+							if (pPack->Contents.ContainedItems.pItems && pPack->Contents.ContainedItems.Size)
+							{
+								for (nAug = 0; nAug < pPack->Contents.ContainedItems.Size; nAug++)
 								{
-									if ((GetItemFromContents(pItem)->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
+									if (pPack->Contents.ContainedItems.pItems->Item[nAug])
 									{
-										Count++;
-									}
-									else
-									{
-										Count += pItem->StackCount;
+										if (PITEMINFO pAug = GetItemFromContents(pPack->Contents.ContainedItems.pItems->Item[nAug]))
+										{
+											if (pAug->Type == ITEMTYPE_NORMAL && pAug->AugType && !_stricmp(pszItemName, pAug->Name))
+											{
+												Count++;
+											}
+										}
 									}
 								}
 							}
 						}
 					}
 				}
+				else
+				{
+					if (pPack->Contents.ContainedItems.pItems)
+					{ 
+						if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+						{
+							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+							{
+								if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+								{
+									if (PITEMINFO theitem = GetItemFromContents(pItem))
+									{
+										if (!_stricmp(pszItemName, theitem->Name))
+										{
+											if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
+												Count++;
+											else
+												Count += pItem->StackCount;
+										}
+										else //check for augs
+										{
+											if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
+											{
+												for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
+												{
+													if (pItem->Contents.ContainedItems.pItems->Item[nAug])
+													{
+														if (PITEMINFO pAug = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
+														{
+															if (pAug->Type == ITEMTYPE_NORMAL && pAug->AugType && !_stricmp(pszItemName, pAug->Name))
+															{
+																Count++;
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}	
+				}
 			}
 		}
 	}
-	for (nPack = 0; nPack < NUM_SHAREDBANK_SLOTS; nPack++) //checking shared bank slots
+	if (pCharInfo && pCharInfo->pBankArray) //checking shared bank slots
 	{
-		if (pCharInfo->pSharedBankArray && (pPack = pCharInfo->pSharedBankArray->SharedBank[nPack]))
+		for (nPack = 0; nPack < NUM_SHAREDBANK_SLOTS; nPack++)
 		{
-			if (PITEMINFO theitem = GetItemFromContents(pPack))
+			if (PCONTENTS pPack = pCharInfo->pSharedBankArray->SharedBank[nPack])
 			{
-				if (!_stricmp(pszItemName, theitem->Name))
+				if (GetItemFromContents(pPack)->Type != ITEMTYPE_PACK)  //It isn't a pack! we should see if this item is what we are looking for
 				{
-					if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pPack)->IsStackable() != 1))
-						Count++;
-					else
-						Count += pPack->StackCount;
-				}
-				if (theitem->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems) //checking shared bank slots
-				{
-					for (unsigned long nItem = 0; nItem < theitem->Slots; nItem++)
+					if (PITEMINFO theitem = GetItemFromContents(pPack))
 					{
-						if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+						if (!_stricmp(pszItemName, theitem->Name))
 						{
-							if (PITEMINFO pStuff = GetItemFromContents(pItem))
+							if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pPack)->IsStackable() != 1))
+								Count++;
+							else
+								Count += pPack->StackCount;
+						}
+						else //check for augs
+						{
+							if (pPack->Contents.ContainedItems.pItems && pPack->Contents.ContainedItems.Size)
 							{
-								if (!_stricmp(pszItemName, pStuff->Name))
+								for (nAug = 0; nAug < pPack->Contents.ContainedItems.Size; nAug++)
 								{
-									if ((pStuff->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
+									if (pPack->Contents.ContainedItems.pItems->Item[nAug])
 									{
-										Count++;
+										if (PITEMINFO pAug = GetItemFromContents(pPack->Contents.ContainedItems.pItems->Item[nAug]))
+										{
+											if (pAug->Type == ITEMTYPE_NORMAL && pAug->AugType && !_stricmp(pszItemName, pAug->Name))
+											{
+												Count++;
+											}
+										}
 									}
-									else
+								}
+							}
+						}
+					}
+				}
+				else
+				{
+					if (pPack->Contents.ContainedItems.pItems)
+					{
+						if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+						{
+							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+							{
+								if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+								{
+									if (PITEMINFO theitem = GetItemFromContents(pItem))
 									{
-										Count += pItem->StackCount;
+										if (!_stricmp(pszItemName, theitem->Name))
+										{
+											if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
+												Count++;
+											else
+												Count += pItem->StackCount;
+										}
+										else //check for augs
+										{
+											if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
+											{
+												for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
+												{
+													if (pItem->Contents.ContainedItems.pItems->Item[nAug])
+													{
+														if (PITEMINFO pAug = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
+														{
+															if (pAug->Type == ITEMTYPE_NORMAL && pAug->AugType && !_stricmp(pszItemName, pAug->Name))
+															{
+																Count++;
+															}
+														}
+													}
+												}
+											}
+										}
 									}
 								}
 							}
@@ -2258,16 +2350,6 @@ void DoLootStuff(CHAR* szAction)
 	// Looping through the items in my inventory and seening if I want to sell/deposit them based on which window was open
 	if (WinState((CXWnd*)pMerchantWnd) || WinState((CXWnd*)pBankWnd) || WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))  // Either bank or merchant window are open
 	{
-		if (StartLootStuffTimer)
-		{
-			LootStuffCancelTimer = pluginclock::now() + std::chrono::minutes(20); // Will stop trying to sell/deposit items after 20 minutes
-			StartLootStuffTimer = false;
-		}
-		if (StartToOpenWindow && !_stricmp(szAction, "Sell"))
-		{
-			DoCommand(GetCharInfo()->pSpawn, "/keypress OPEN_INV_BAGS"); // Will remove this when /itemnotify works inside closed packs for merchant stuff
-			StartToOpenWindow = false;
-		}
 		LootStuffWindowOpen = true;
 		if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
 		{
@@ -2895,7 +2977,6 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		StartMoveToTarget = true;
 		StartToOpenWindow = true;
 		LootStuffWindowOpen = false;
-		StartLootStuffTimer = true;
 		LootStuffN = 1;
 		LootStuffTimer = pluginclock::now();
 		LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000);
@@ -2912,7 +2993,6 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		StartMoveToTarget = true;
 		StartToOpenWindow = true;
 		LootStuffWindowOpen = false;
-		StartLootStuffTimer = true;
 		LootStuffN = 1;
 		LootStuffTimer = pluginclock::now();
 		LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000);
@@ -2939,10 +3019,15 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 	else if (!_stricmp(Parm1, "test"))
 	{
 		WriteChatf(PLUGIN_MSG ":: Testing stuff, please ignore this command.  I will remove it later once plugin is done");
+		WriteChatf(PLUGIN_MSG ":: You have %d of %s", FindItemCount(Parm2), Parm2);
 	}
-	else if (!_stricmp(Parm1, "")) {
-		ShowInfo = TRUE;
-		NeedHelp = TRUE;
+	else if (!_stricmp(Parm1, "status"))
+	{
+		ShowInfo = true;
+	}
+	else 
+	{
+		NeedHelp = true;
 	}
 	if (NeedHelp) {
 		WriteChatColor("Usage:");
@@ -2962,6 +3047,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		WriteChatColor("/AutoLoot sell -> If you have targeted a merchant, it will sell all the items marked Sell in your inventory");
 		WriteChatColor("/AutoLoot deposit -> If you have your personal banker targetted it will put all items marked Keep into your bank");
 		WriteChatColor("/AutoLoot deposit -> If you have your guild banker targetted it will put all items marked Deposit into your guild bank");
+		WriteChatColor("/AutoLoot status -> Shows the settings for MQ2AutoLoot.");
 		WriteChatColor("/AutoLoot help");
 	}
 	if (ShowInfo) {
