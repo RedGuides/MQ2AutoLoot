@@ -1725,7 +1725,7 @@ DWORD FindItemCount(CHAR* pszItemName)
 			}
 		}
 	}
-	if (pCharInfo && pCharInfo->pBankArray) //checking shared bank slots
+	if (pCharInfo && pCharInfo->pSharedBankArray) //checking shared bank slots
 	{
 		for (nPack = 0; nPack < NUM_SHAREDBANK_SLOTS; nPack++)
 		{
