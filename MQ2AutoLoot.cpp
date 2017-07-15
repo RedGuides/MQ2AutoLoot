@@ -739,8 +739,10 @@ PLUGIN_API VOID OnPulse(VOID)
 									}
 									else
 									{
-										//TODO add safety checks to make sure it is a number etc
-										QuestNumber = atoi(pParsedValue);
+										if (IsNumber(pParsedValue))
+										{
+											QuestNumber = atoi(pParsedValue);
+										}
 									}
 									if ((ItemOnCursor || pShareItem->LootDetails->Locked || QuestNumber <= FindItemCount(pShareItem->Name) || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails->StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && !pChar->pGroupInfo->pMember[0]->MasterLooter)
 									{
@@ -796,8 +798,10 @@ PLUGIN_API VOID OnPulse(VOID)
 											}
 											else
 											{
-												//TODO add safety checks to make sure it is a number etc
-												GearNumber = atoi(pParsedValue);
+												if (IsNumber(pParsedValue))
+												{
+													GearNumber = atoi(pParsedValue);
+												}
 												break;
 											}
 										}
@@ -1970,8 +1974,10 @@ void DoBarterStuff(CHAR* szAction)
 							}
 							else
 							{
-								//TODO add safety checks to make sure it is a number etc
-								MyBarterMinimum = atoi(pParsedValue);
+								if (IsNumber(pParsedValue))
+								{
+									MyBarterMinimum = atoi(pParsedValue);
+								}
 								if (LootStuffN == 1)
 								{
 									WriteChatf(PLUGIN_MSG ":: For entry %i, the item's name is %s and I will sell for: %d platinum", nBarterItems + 1, szItemName, MyBarterMinimum);
@@ -2050,7 +2056,6 @@ void DoBarterStuff(CHAR* szAction)
 										}
 										else
 										{
-											// Hey I think this means that no one wants to buy the item, TODO verify this shit
 											BarterIndex++;
 											LootStuffN = 1;
 											return;
@@ -2091,7 +2096,6 @@ void DoBarterStuff(CHAR* szAction)
 												}
 												else
 												{
-													// This shouldn't fail, TODO verify this shit
 													BarterIndex++;
 													WriteChatf(PLUGIN_MSG ":: Whoa this shouldn't fail, somehow this person is selling %s but has none to sell", szItemName);
 													LootStuffN = 1;
@@ -2101,7 +2105,6 @@ void DoBarterStuff(CHAR* szAction)
 												WriteChatf(PLUGIN_MSG ":: My count is %d, and the barter count is %d for %s", MyCount, BarterCount, szItemName);
 												if (MyCount == 0)
 												{
-													// This shouldn't fail, TODO verify this shit
 													BarterIndex++;
 													LootStuffN = 1;
 													return;
@@ -2157,7 +2160,7 @@ void DoBarterStuff(CHAR* szAction)
 					}
 					else
 					{
-						// Hey I think this means the item isn't in my loot.ini, TODO verify this shit
+						// Hey I think this means the item isn't in my loot.ini
 						BarterIndex++;
 						WriteChatf(PLUGIN_MSG ":: Barter index:%d and the item name is %s", BarterIndex, szItemName);
 						return;
@@ -2889,37 +2892,68 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		WriteChatf(PLUGIN_MSG ":: Spam looting actions %s", SpamLootInfo ? "\agON\ax" : "\arOFF\ax");
 	}
 	else if (!_stricmp(Parm1, "barterminimum")) {
-		//TODO add safety checks to make sure it is a number etc
-		BarMinSellPrice = atoi(Parm2);
-		WritePrivateProfileString("Settings", "BarMinSellPrice", Parm2, LootINI);
-		WriteChatf(PLUGIN_MSG ":: Stop looting when \ag%d\ax slots are left", BarMinSellPrice);
+		if (IsNumber(Parm2))
+		{
+			BarMinSellPrice = atoi(Parm2);
+			WritePrivateProfileString("Settings", "BarMinSellPrice", Parm2, LootINI);
+			WriteChatf(PLUGIN_MSG ":: Stop looting when \ag%d\ax slots are left", BarMinSellPrice);
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Please send a valid number for your minimum barter price");
+		}
 	}
-	else if (!_stricmp(Parm1, "saveslots")) {
-		//TODO add safety checks to make sure it is a number etc
-		SaveBagSlots = atoi(Parm2);
-		WritePrivateProfileString("Settings", "SaveBagSlots", Parm2, LootINI);
-		WriteChatf(PLUGIN_MSG ":: Stop looting when \ag%d\ax slots are left", SaveBagSlots);
+	else if (!_stricmp(Parm1, "saveslots")) 
+	{
+		if (IsNumber(Parm2))
+		{
+			SaveBagSlots = atoi(Parm2);
+			WritePrivateProfileString("Settings", "SaveBagSlots", Parm2, LootINI);
+			WriteChatf(PLUGIN_MSG ":: Stop looting when \ag%d\ax slots are left", SaveBagSlots);
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Please send a valid number for the number of bag slots to save");
+		}
 	}
 	else if (!_stricmp(Parm1, "distributedelay"))
 	{
-		//TODO add safety checks to make sure it is a number etc
-		DistributeLootDelay = atoi(Parm2);
-		WritePrivateProfileString("Settings", "DistributeLootDelay", Parm2, LootINI);
-		WriteChatf(PLUGIN_MSG ":: The master looter will wait \ag%d\ax seconds before trying to distribute loot", DistributeLootDelay);
+		if (IsNumber(Parm2))
+		{
+			DistributeLootDelay = atoi(Parm2);
+			WritePrivateProfileString("Settings", "DistributeLootDelay", Parm2, LootINI);
+			WriteChatf(PLUGIN_MSG ":: The master looter will wait \ag%d\ax seconds before trying to distribute loot", DistributeLootDelay);
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Please send a valid number for the distribute loot delay");
+		}
 	}
 	else if (!_stricmp(Parm1, "cursordelay"))
 	{
-		//TODO add safety checks to make sure it is a number etc
-		CursorDelay = atoi(Parm2);
-		WritePrivateProfileString("Settings", "CursorDelay", Parm2, LootINI);
-		WriteChatf(PLUGIN_MSG ":: You will wait \ag%d\ax seconds before trying to autoinventory items on your cursor", CursorDelay);
+		if (IsNumber(Parm2))
+		{
+			CursorDelay = atoi(Parm2);
+			WritePrivateProfileString("Settings", "CursorDelay", Parm2, LootINI);
+			WriteChatf(PLUGIN_MSG ":: You will wait \ag%d\ax seconds before trying to autoinventory items on your cursor", CursorDelay);
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Please send a valid number for the cursor delay");
+		}
 	}
 	else if (!_stricmp(Parm1, "questkeep"))
 	{
-		//TODO add safety checks to make sure it is a number etc
-		QuestKeep = atoi(Parm2);
-		WritePrivateProfileString("Settings", "QuestKeep", Parm2, LootINI);
-		WriteChatf(PLUGIN_MSG ":: Your default number to keep of new no drop items is: \ag%d\ax", QuestKeep);
+		if (IsNumber(Parm2))
+		{
+			QuestKeep = atoi(Parm2);
+			WritePrivateProfileString("Settings", "QuestKeep", Parm2, LootINI);
+			WriteChatf(PLUGIN_MSG ":: Your default number to keep of new no drop items is: \ag%d\ax", QuestKeep);
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Please send a valid number for default number of quest items to keep");
+		}
 	}
 	else if (!_stricmp(Parm1, "nodropdefault"))
 	{
