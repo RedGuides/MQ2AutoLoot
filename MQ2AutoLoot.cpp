@@ -6,7 +6,7 @@
 // and Shutdown for setup and cleanup, do NOT do it in DllMain.
 
 #define PLUGIN_NAME					"MQ2AutoLoot"                // Plugin Name
-#define VERSION						1.01
+#define VERSION						1.02
 #define	PLUGIN_MSG					"\ag[MQ2AutoLoot]\ax "     
 #define PERSONALBANKER_CLASS		40
 #define MERCHANT_CLASS				41
@@ -18,6 +18,7 @@ PreSetup(PLUGIN_NAME);
 PLUGIN_VERSION(VERSION);
 #endif PLUGIN_API
 
+#include "../MQ2AutoLootSort/LootSort.h"
 #include <chrono>
 typedef std::chrono::high_resolution_clock pluginclock;
 
@@ -3140,7 +3141,11 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 	{
 		ShowInfo = true;
 	}
-	else 
+	else if (!_stricmp(Parm1, "sort"))
+	{
+		sort_auto_loot(string(LootINI), [](auto msg) {WriteChatf(PLUGIN_MSG ":: %s",msg.c_str());});
+	}
+	else
 	{
 		NeedHelp = true;
 	}
@@ -3163,6 +3168,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		WriteChatColor("/AutoLoot deposit -> If you have your personal banker targetted it will put all items marked Keep into your bank");
 		WriteChatColor("/AutoLoot deposit -> If you have your guild banker targetted it will put all items marked Deposit into your guild bank");
 		WriteChatColor("/AutoLoot status -> Shows the settings for MQ2AutoLoot.");
+		WriteChatColor("/AutoLoot sort -> Sort the Loot.ini file.");
 		WriteChatColor("/AutoLoot help");
 	}
 	if (ShowInfo) {

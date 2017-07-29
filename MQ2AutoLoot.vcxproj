@@ -50,9 +50,11 @@
     <ClCompile />
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\MQ2AutoLootSort\LootSort.cpp" />
     <ClCompile Include="MQ2AutoLoot.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\MQ2AutoLootSort\LootSort.h" />
     <ClInclude Include="..\MQ2Plugin.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
