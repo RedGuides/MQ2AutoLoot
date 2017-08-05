@@ -92,7 +92,7 @@ DWORD __stdcall BuyItem(PVOID pData);
 // Returns TRUE if character is in game and has valid character data structures
 inline bool InGameOK()
 {
-	return(GetGameState() == GAMESTATE_INGAME && GetCharInfo() && GetCharInfo()->pSpawn && GetCharInfo2());
+	return(GetGameState() == GAMESTATE_INGAME && GetCharInfo() && GetCharInfo()->pSpawn && GetCharInfo()->pSpawn->StandState != STANDSTATE_DEAD && GetCharInfo2());
 }
 
 // Returns TRUE if the specified UI window is visible
@@ -645,15 +645,14 @@ PLUGIN_API VOID OnPulse(VOID)
 			CHAR MyName[MAX_STRING] = { 0 }; //My name
 			GetCXStr(pChar->pGroupInfo->pMember[0]->pName, MyName, MAX_STRING);
 			//If I don't have a masterlooter set and I am leader I will set myself master looter
-			if (pChar->pGroupInfo)
+			for (LONG k = 0; k < 6; k++)
 			{
-				for (LONG k = 0; k < 6; k++)
+				if (pChar->pGroupInfo->pMember[k] && pChar->pGroupInfo->pMember[k]->pName && pChar->pGroupInfo->pMember[k]->MasterLooter)
 				{
-					if (pChar->pGroupInfo->pMember[k] && pChar->pGroupInfo->pMember[k]->pName && pChar->pGroupInfo->pMember[k]->MasterLooter)
-					{
-						k = 6;  // this is required to stop the for loop once we know we have a master looter set
-						break;
-					}
+					break;
+				}
+				if (pChar->pGroupInfo->pLeader && pChar->pGroupInfo->pLeader->pSpawn && pChar->pGroupInfo->pLeader->pSpawn->SpawnID)
+				{
 					if (k == 5 && pChar->pGroupInfo->pLeader->pSpawn->SpawnID == pChar->pSpawn->SpawnID)  // oh shit we have loot and no master looter set yet and I am the leader, so lets make me the leader
 					{
 						WriteChatf(PLUGIN_MSG ":: I am setting myself to master looter");
@@ -1934,13 +1933,15 @@ void DestroyStuff()
 DWORD __stdcall BuyItem(PVOID pData)
 {
 	int  iItemCount;
+	int  iMaxItemCount;
+	int	 iBuyItemCount;
 	CHAR szTemp1[MAX_STRING];
 	CHAR szItemToBuy[MAX_STRING];
 	CXStr	cxstrItemName;
 	CHAR	szItemName[MAX_STRING] = { 0 };
 	CXStr	cxstrItemCount;
 	CHAR	szItemCount[MAX_STRING] = { 0 };
-	pluginclock::time_point	BuyTimer = pluginclock::now();
+	CHAR	szBuyItemCount[MAX_STRING] = { 0 };
 
 	sprintf_s(szTemp1, "%s", (PCHAR)pData);
 	CHAR *pParsedToken = NULL;
@@ -1950,7 +1951,6 @@ DWORD __stdcall BuyItem(PVOID pData)
 	if (IsNumber(pParsedValue))
 	{
 		iItemCount = atoi(pParsedValue);
-		WriteChatf(PLUGIN_MSG ":: You want to buy \ag%d\ax of \ag%s\ax",iItemCount, szItemToBuy);
 		if (WinState((CXWnd*)pMerchantWnd))  // merchant window are open
 		{
 			if (CListWnd *cLWnd = (CListWnd *)FindMQ2Window("MerchantWnd")->GetChildItem("MW_ItemList"))
@@ -1964,33 +1964,73 @@ DWORD __stdcall BuyItem(PVOID pData)
 							GetCXStr(cxstrItemName.Ptr, szItemName, MAX_STRING);
 							if (!_stricmp(szItemToBuy, szItemName))
 							{
-								WriteChatf(PLUGIN_MSG ":: I found \ag%s\ax on the merchant!", szItemToBuy);
+
 								if (cLWnd->GetCurSel() != nMerchantItems)
 								{
-									cLWnd->SetCurSel(nMerchantItems);
-
+									SendListSelect("MerchantWnd", "MW_ItemList", nMerchantItems);
 								}
-								BuyTimer = pluginclock::now() + std::chrono::seconds(10); // If I haven't targeted the item within 10 seconds i'm going to bail on this shit
 								while (cLWnd->GetCurSel() != nMerchantItems)
 								{
-									Sleep(100); // 0.1 seconds
-									if (pluginclock::now() < BuyTimer)
-									{
-										WriteChatf(PLUGIN_MSG ":: Woah you weren't able to target the item to buy within 10 seconds!");
-										WriteChatf(PLUGIN_MSG ":: Bailing on attempting to buy \ar%s\ax!", szItemToBuy);
-										return 0;
-									}
+									if (!WinState((CXWnd*)pMerchantWnd)) return 0;
 								}
 								if (cLWnd->GetItemText(&cxstrItemCount, nMerchantItems, 2))
 								{
 									GetCXStr(cxstrItemCount.Ptr, szItemCount, MAX_STRING);
-									if (!_stricmp(szItemCount, "--"))
+									if (_stricmp(szItemCount, "--"))
 									{
-										WriteChatf(PLUGIN_MSG ":: I found \agInfinite\ax number on the merchant!");
+										iMaxItemCount = atoi(szItemCount);
+										if (iItemCount > iMaxItemCount)
+										{
+											iItemCount = iMaxItemCount;
+										}
 									}
-									else
+									while (iItemCount > 0)
 									{
-										WriteChatf(PLUGIN_MSG ":: I found \ag%d\ax number on the merchant!", atoi(szItemCount));
+										if (!WinState((CXWnd*)pMerchantWnd)) return 0;
+										if (CXWnd *pWndButton = FindMQ2Window("MerchantWnd")->GetChildItem("MW_Buy_Button"))
+										{
+											if (pWndButton->Enabled)
+											{
+												SendWndClick2(pWndButton, "leftmouseup");
+											}
+										}
+										while (!WinState((CXWnd*)pQuantityWnd))
+										{
+											if (!WinState((CXWnd*)pMerchantWnd)) return 0;
+											Sleep(100);
+										}
+										if (WinState((CXWnd*)pQuantityWnd))
+										{
+											if (CXWnd *pWndInput = pQuantityWnd->GetChildItem("QTYW_SliderInput"))
+											{
+												GetCXStr(pWndInput->WindowText, szBuyItemCount, MAX_STRING);
+												if (IsNumber(szBuyItemCount))
+												{
+													iBuyItemCount = atoi(szBuyItemCount);
+													if (iItemCount < iBuyItemCount)
+													{
+														iBuyItemCount = iItemCount;
+													}
+													SendWndNotification("QuantityWnd", "QTYW_Slider", 14, (void*)iBuyItemCount); //newvalue = 14
+													while (iBuyItemCount != atoi(szBuyItemCount))
+													{
+														if (!WinState((CXWnd*)pMerchantWnd)) return 0;
+														Sleep(100);
+														GetCXStr(pWndInput->WindowText, szBuyItemCount, MAX_STRING);
+													}
+													if (CXWnd *pWndButton = pQuantityWnd->GetChildItem("QTYW_Accept_Button"))
+													{
+														if (pWndButton->Enabled)
+														{
+															SendWndClick2(pWndButton, "leftmouseup");
+														}
+													}
+													iItemCount = iItemCount - iBuyItemCount;
+													WriteChatf(PLUGIN_MSG ":: \ag%d\ax to buy of \ag%s\ax!", iItemCount, szItemToBuy);
+													Sleep(1000);
+												}
+											}
+										}
 									}
 								}
 							}
@@ -2004,10 +2044,6 @@ DWORD __stdcall BuyItem(PVOID pData)
 			WriteChatf(PLUGIN_MSG ":: Please open a merchant window first before attempting to buy: \ag%s\ax", szItemToBuy);
 		}
 	}
-
-
-	Sleep(10000); // 10 seconds
-
 	return 0;
 }
 
@@ -3118,8 +3154,6 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 	}
 	else if (!_stricmp(Parm1, "buy"))
 	{
-		WriteChatf(PLUGIN_MSG ":: This command is not ready for release yet! Coming next patch");
-		return;
 		CHAR	szTemp1[MAX_STRING] = { 0 };
 		sprintf_s(szTemp1, "%s|%s", Parm2, Parm3);
 		if (IsNumber(Parm3))
@@ -3167,6 +3201,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
 		WriteChatColor("/AutoLoot sell -> If you have targeted a merchant, it will sell all the items marked Sell in your inventory");
 		WriteChatColor("/AutoLoot deposit -> If you have your personal banker targetted it will put all items marked Keep into your bank");
 		WriteChatColor("/AutoLoot deposit -> If you have your guild banker targetted it will put all items marked Deposit into your guild bank");
+		WriteChatColor("/AutoLoot buy \"Item Name\" #n -> Will buy #n of \"Item Name\" from the merchant");
 		WriteChatColor("/AutoLoot status -> Shows the settings for MQ2AutoLoot.");
 		WriteChatColor("/AutoLoot sort -> Sort the Loot.ini file.");
 		WriteChatColor("/AutoLoot help");
