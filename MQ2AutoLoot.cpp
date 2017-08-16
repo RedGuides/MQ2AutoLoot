@@ -6,7 +6,7 @@
 // and Shutdown for setup and cleanup, do NOT do it in DllMain.
 
 #define PLUGIN_NAME					"MQ2AutoLoot"                // Plugin Name
-#define VERSION						1.02
+#define VERSION						1.03
 #define	PLUGIN_MSG					"\ag[MQ2AutoLoot]\ax "     
 #define PERSONALBANKER_CLASS		40
 #define MERCHANT_CLASS				41
@@ -18,8 +18,11 @@ PreSetup(PLUGIN_NAME);
 PLUGIN_VERSION(VERSION);
 #endif PLUGIN_API
 
+#include "LootPatterns.h"
 #include "../MQ2AutoLootSort/LootSort.h"
 #include <chrono>
+#include <string.h>
+
 typedef std::chrono::high_resolution_clock pluginclock;
 
 //MoveUtils 11.x
@@ -103,7 +106,7 @@ inline bool WinState(CXWnd *Wnd)
 
 #pragma endregion Inlines
 
-class MQ2AutoLootType* pAutoLootType = NULL;
+class MQ2AutoLootType* pAutoLootType = nullptr;
 class MQ2AutoLootType : public MQ2Type
 {
 public:
@@ -189,6 +192,7 @@ PLUGIN_API VOID InitializePlugin()
 
 PLUGIN_API VOID ShutdownPlugin()
 {
+	forget_loot_patterns();
     // remove commands
 	RemoveCommand("/autoloot");
 	RemoveCommand("/setitem");
@@ -336,10 +340,10 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 // This is called every time MQ pulses
 PLUGIN_API VOID OnPulse(VOID)
 {
-	if (!InGameOK()) return;
+	if (!UseAutoLoot || !InGameOK()) return;
 	PCHARINFO pChar = GetCharInfo();
+	if (!pChar->UseAdvancedLooting) return;
 	PCHARINFO2 pChar2 = GetCharInfo2();
-	if (!UseAutoLoot || !pChar->UseAdvancedLooting) return;
 
 	//check cursor for items, and will put in inventory if it fits after CursorDelay has been exceed
 	bool ItemOnCursor = false;
@@ -516,10 +520,6 @@ PLUGIN_API VOID OnPulse(VOID)
 		}
 	}
 
-	CHAR DistributeName[MAX_STRING] = { 0 }; //Name of person to distribute to
-	CHAR INISection[MAX_STRING] = { 0 };
-	CHAR LootEntry[MAX_STRING] = { 0 };
-	CHAR Value[MAX_STRING] = { 0 };
 	if (pAdvLoot->pPLootList)
 	{
 		for (LONG k = 0; k < pPersonalList->ItemsArray.Count; k++)
@@ -530,11 +530,17 @@ PLUGIN_API VOID OnPulse(VOID)
 				DWORD multiplier = sizeof(LOOTITEM) * listindex;
 				if (PLOOTITEM pPersonalItem = (PLOOTITEM)(((DWORD)pAdvLoot->pPLootList->pLootItem) + multiplier))
 				{
-					sprintf_s(INISection, "%c", pPersonalItem->Name[0]);
-					if (GetPrivateProfileString(INISection, pPersonalItem->Name, 0, Value, MAX_STRING, LootINI) == 0)
+					CHAR action[MAX_STRING];
+					action[0] = '\0';
+					CHAR INISection[] = { pPersonalItem->Name[0],'\0' };
+					auto found = GetPrivateProfileString(INISection, pPersonalItem->Name, 0, action, MAX_STRING, LootINI) ||
+									action_from_loot_patterns(pPersonalItem->Name, action, MAX_STRING);
+					if (!found)
 					{
 						if (pPersonalItem->NoDrop)
 						{
+							CHAR LootEntry[MAX_STRING];
+							LootEntry[0] = '\0';
 							CHAR *pParsedToken = NULL;
 							CHAR *pParsedValue = strtok_s(NoDropDefault, "|", &pParsedToken);
 							if (!_stricmp(pParsedValue, "Quest"))
@@ -551,21 +557,21 @@ PLUGIN_API VOID OnPulse(VOID)
 							}
 							WriteChatf(PLUGIN_MSG ":: The \ag%s\ax is not in the database, setting it to %s", pPersonalItem->Name, LootEntry);
 							WritePrivateProfileString(INISection, pPersonalItem->Name, LootEntry, LootINI);
-							sprintf_s(Value, "%s", LootEntry);
+							sprintf_s(action, "%s", LootEntry);
 						}
 						else
 						{
 							WriteChatf(PLUGIN_MSG ":: The \ag%s\ax is not in the database, setting it to Keep", pPersonalItem->Name);
 							WritePrivateProfileString(INISection, pPersonalItem->Name, "Keep", LootINI);
-							sprintf_s(Value, "Keep");
+							sprintf_s(action, "Keep");
 						}
 					}
 					else
 					{
 						if (LootInProgress(pAdvLoot, pPersonalList, pSharedList)) return;
 						CHAR *pParsedToken = NULL;
-						CHAR *pParsedValue = strtok_s(Value, "|", &pParsedToken);
-						if (!_stricmp(pParsedValue, "Keep") || !_stricmp(pParsedValue, "Sell") || !_stricmp(pParsedValue, "Deposit") || !_stricmp(pParsedValue, "Barter") || !_stricmp(pParsedValue, "Quest") || !_stricmp(pParsedValue, "Gear") || !_stricmp(Value, "Destroy"))
+						CHAR *pParsedValue = strtok_s(action, "|", &pParsedToken);
+						if (!_stricmp(pParsedValue, "Keep") || !_stricmp(pParsedValue, "Sell") || !_stricmp(pParsedValue, "Deposit") || !_stricmp(pParsedValue, "Barter") || !_stricmp(pParsedValue, "Quest") || !_stricmp(pParsedValue, "Gear") || !_stricmp(action, "Destroy"))
 						{
 							if (pPersonalItem->LootDetails->Locked || CheckIfItemIsLoreByID(pPersonalItem->ItemID) || !DoIHaveSpace(pPersonalItem->Name, pPersonalItem->MaxStack, pPersonalItem->LootDetails->StackCount))
 							{
@@ -575,7 +581,7 @@ PLUGIN_API VOID OnPulse(VOID)
 								DoCommand(GetCharInfo()->pSpawn, Command);
 								return;
 							}
-							if (!_stricmp(Value, "Destroy"))
+							if (!_stricmp(action, "Destroy"))
 							{
 								DestroyID = pPersonalItem->ItemID;
 								DestroyStuffCancelTimer = pluginclock::now() + std::chrono::seconds(10);
@@ -607,6 +613,8 @@ PLUGIN_API VOID OnPulse(VOID)
 						{
 							if (pPersonalItem->NoDrop)
 							{
+								CHAR LootEntry[MAX_STRING];
+								LootEntry[0] = '\0';
 								CHAR *pParsedToken = NULL;
 								CHAR *pParsedValue = strtok_s(NoDropDefault, "|", &pParsedToken);
 								if (!_stricmp(pParsedValue, "Quest"))
@@ -642,25 +650,27 @@ PLUGIN_API VOID OnPulse(VOID)
 	{
 		if (pChar->pGroupInfo && pChar->pGroupInfo->pMember && pChar->pGroupInfo->pMember[0])
 		{
-			CHAR MyName[MAX_STRING] = { 0 }; //My name
+			CHAR MyName[MAX_STRING]; //My name
+			MyName[0] = '\0';
 			GetCXStr(pChar->pGroupInfo->pMember[0]->pName, MyName, MAX_STRING);
 			//If I don't have a masterlooter set and I am leader I will set myself master looter
-			for (LONG k = 0; k < 6; k++)
+			auto ml = 0;
+			for (; ml < 6; ml++)
 			{
-				if (pChar->pGroupInfo->pMember[k] && pChar->pGroupInfo->pMember[k]->pName && pChar->pGroupInfo->pMember[k]->MasterLooter)
+				if (pChar->pGroupInfo->pMember[ml] && pChar->pGroupInfo->pMember[ml]->pName && pChar->pGroupInfo->pMember[ml]->MasterLooter)
 				{
 					break;
 				}
-				if (pChar->pGroupInfo->pLeader && pChar->pGroupInfo->pLeader->pSpawn && pChar->pGroupInfo->pLeader->pSpawn->SpawnID)
+			}
+			if (ml == 6 && pChar->pGroupInfo->pLeader && pChar->pGroupInfo->pLeader->pSpawn && pChar->pGroupInfo->pLeader->pSpawn->SpawnID)
+			{
+				if (pChar->pGroupInfo->pLeader->pSpawn->SpawnID == pChar->pSpawn->SpawnID)  // oh shit we have loot and no master looter set yet and I am the leader, so lets make me the leader
 				{
-					if (k == 5 && pChar->pGroupInfo->pLeader->pSpawn->SpawnID == pChar->pSpawn->SpawnID)  // oh shit we have loot and no master looter set yet and I am the leader, so lets make me the leader
-					{
-						WriteChatf(PLUGIN_MSG ":: I am setting myself to master looter");
-						sprintf_s(Command, "/grouproles set %s 5", MyName);
-						DoCommand(GetCharInfo()->pSpawn, Command);
-						LootTimer = pluginclock::now() + std::chrono::seconds(5);  //Two seconds was too short, it attempts to set masterlooter a second time.  Setting to 5 seconds that should fix this
-						return;
-					}
+					WriteChatf(PLUGIN_MSG ":: I am setting myself to master looter");
+					sprintf_s(Command, "/grouproles set %s 5", MyName);
+					DoCommand(GetCharInfo()->pSpawn, Command);
+					LootTimer = pluginclock::now() + std::chrono::seconds(5);  //Two seconds was too short, it attempts to set masterlooter a second time.  Setting to 5 seconds that should fix this
+					return;
 				}
 			}
 			//Loop over the item array to find see if I need to set something
@@ -684,14 +694,17 @@ PLUGIN_API VOID OnPulse(VOID)
 						}
 						if (!pShareItem->AutoRoll && !pShareItem->No && !pShareItem->Need && !pShareItem->Greed)
 						{
-							sprintf_s(INISection, "%c", pShareItem->Name[0]);
+							CHAR INISection[]{ pShareItem->Name[0],'\0' };
 							bool IWant = false;  // Will be set true if you want and can accept the item
 							bool IDoNotWant = false;  // Will be set true if you don't want or can't accept
 							bool CheckIfOthersWant = false;  // Will be set true if I am ML and I can't accept or don't need
+							CHAR Value[MAX_STRING];
+							Value[0] = '\0';
 							if (GetPrivateProfileString(INISection, pShareItem->Name, 0, Value, MAX_STRING, LootINI) == 0)
 							{
 								if (pShareItem->NoDrop)
 								{
+									CHAR LootEntry[MAX_STRING] = { 0 };
 									CHAR *pParsedToken = NULL;
 									CHAR *pParsedValue = strtok_s(NoDropDefault, "|", &pParsedToken);
 									if (!_stricmp(pParsedValue, "Quest"))
@@ -852,6 +865,7 @@ PLUGIN_API VOID OnPulse(VOID)
 								{
 									if (pShareItem->NoDrop)
 									{
+										CHAR LootEntry[MAX_STRING] = { 0 };
 										CHAR *pParsedToken = NULL;
 										CHAR *pParsedValue = strtok_s(NoDropDefault, "|", &pParsedToken);
 										if (!_stricmp(pParsedValue, "Quest"))
@@ -958,6 +972,8 @@ PLUGIN_API VOID OnPulse(VOID)
 												{
 													if (pChar->pGroupInfo->pMember[DistributeI]->pSpawn)
 													{
+														CHAR DistributeName[MAX_STRING]; //Name of person to distribute to
+														DistributeName[0] = '\0';
 														GetCXStr(pChar->pGroupInfo->pMember[DistributeI]->pName, DistributeName, MAX_STRING);
 														//Attempting to give to someone in my group
 														LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
@@ -2817,6 +2833,8 @@ void SetAutoLootVariables()
 		sprintf_s(ExcludedBag2, "Extraplanar Trade Satchel");
 		WritePrivateProfileString("Settings", "ExcludeBag2", ExcludedBag2, LootINI);
 	}
+	const auto report_function = [](const char* message) {WriteChatf(PLUGIN_MSG ":: %s", message);};
+	read_loot_patterns(LootINI, report_function);
 
 	if (Initialized) // Won't spam this on start up of plugin, will only spam if someone reloads their settings
 	{
@@ -2830,6 +2848,7 @@ void SetAutoLootVariables()
 		WriteChatf(PLUGIN_MSG ":: Your default for new no drop items is: \ag%s\ax", NoDropDefault);
 		WriteChatf(PLUGIN_MSG ":: Will exclude \ar%s\ax when checking for free slots", ExcludedBag1);
 		WriteChatf(PLUGIN_MSG ":: Will exclude \ar%s\ax when checking for free slots", ExcludedBag2);
+		list_loot_patterns(report_function);
 		WriteChatf(PLUGIN_MSG ":: The location for your loot ini is:\n \ag%s\ax", LootINI);
 	}
 }
@@ -2950,16 +2969,12 @@ void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
 	}
 }
 
-void CreateLootINI(void)
+void CreateLootINI()
 {
-	CHAR INISections[MAX_STRING] = "Settings|Global|A|B|C|D|E|F|G|H|I|J|K|L|M|N|O|P|Q|R|S|T|U|V|W|X|Y|Z";
-	CHAR *pParsedToken = NULL;
-	CHAR *pParsedValue = strtok_s(INISections, "|", &pParsedToken);
-	while (pParsedValue != NULL)
-	{
-		WritePrivateProfileString(pParsedValue, "|===================================", "==================================|", LootINI);
-		pParsedValue = strtok_s(NULL, "|", &pParsedToken);
-	}
+	const auto sections = {"Settings","Patterns","Global","A","B","C","D","E",
+		"F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z" };
+	for (const auto section : sections)
+		WritePrivateProfileString(section, "|", "=====================================================================|", LootINI);
 }
 
 void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR zLine)
