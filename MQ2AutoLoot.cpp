@@ -14,7 +14,6 @@
 
 #ifndef PLUGIN_API
 #include "../MQ2Plugin.h"
-using namespace std;
 PreSetup(PLUGIN_NAME);
 PLUGIN_VERSION(VERSION);
 #endif PLUGIN_API
@@ -22,8 +21,9 @@ PLUGIN_VERSION(VERSION);
 #include "LootPatterns.h"
 #include "../MQ2AutoLootSort/LootSort.h"
 #include <chrono>
-#include <string.h>
+//#include <string.h>
 
+using namespace std;
 typedef std::chrono::high_resolution_clock pluginclock;
 
 //MoveUtils 11.x
@@ -41,19 +41,25 @@ int						iSaveBagSlots = 0;
 int						iQuestKeep = 0;
 int						iBarMinSellPrice = 1;
 int						iLogLoot = 1;
-CHAR					szNoDropDefault[MAX_STRING];
-CHAR					szLootINI[MAX_STRING];
-CHAR					szExcludedBag1[MAX_STRING];
-CHAR					szExcludedBag2[MAX_STRING];
+char					szNoDropDefault[MAX_STRING];
+char					szLootINI[MAX_STRING];
+char					szExcludedBag1[MAX_STRING];
+char					szExcludedBag2[MAX_STRING];
+char					szGuildItemPermission[MAX_STRING];
 // Variables that are used within the plugin, but not setable 
 bool					Initialized = false;
 bool					CheckedAutoLootAll = false;  // used to heck if Auto Loot All is checks
 bool					StartCursorTimer = true;  // 
 bool					StartDistributeLootTimer = true;  // 
+bool					bEndThreads = true;  // set to true when you want to end any threads out there, also it is used to enforce that at most a single thread is active at one time
 bool					StartLootStuff = false; // When set true will call DoLootStuff
 bool					StartMoveToTarget = false; // Will move to target (banker/merchant) when set to true
 bool					StartToOpenWindow = false; // Will move to target (banker/merchant) when set to true
 bool					LootStuffWindowOpen = false; // Will be set true the first time the merchant/barter/banker window is open and will stop you from reopening the window a second time
+bool					bBarterActive = false; 
+bool					bSellActive = false;
+bool					bDepositActive = false;
+bool					bBuyActive = false;
 LONG					DistributeI; //Index for looping over people in the group to try and distribute an item 
 LONG					DistributeK;  // Index for the item to be distributed
 LONG					LootStuffN;  //
@@ -61,11 +67,11 @@ LONG					BarterIndex;  //
 DWORD					DestroyID;
 DWORD					CursorItemID;
 DWORD					DistributeItemID;
-CHAR					szTemp[MAX_STRING];
-CHAR					szCommand[MAX_STRING];
-CHAR					szLootStuffAction[MAX_STRING];
-CHAR					szLogPath[MAX_STRING];
-CHAR					szLogFileName[MAX_STRING];
+char					szTemp[MAX_STRING];
+char					szCommand[MAX_STRING];
+char					szLootStuffAction[MAX_STRING];
+char					szLogPath[MAX_STRING];
+char					szLogFileName[MAX_STRING];
 pluginclock::time_point	LootTimer = pluginclock::now();
 pluginclock::time_point	CursorTimer = pluginclock::now();
 pluginclock::time_point	DistributeLootTimer = pluginclock::now();
@@ -78,14 +84,12 @@ pluginclock::time_point	LootStuffCancelTimer = pluginclock::now();
 PMQPLUGIN Plugin(char* PluginName);
 bool HandleMoveUtils(void);  // Used to connect to MQ2MoveUtils
 bool HandleEQBC(void);  // Used to get EQBC Names
-int AutoLootFreeInventory(void);
+int AutoLootFreeInventory(void); // used to calculate TLO ${AutoLoot.FreeInventory}
 bool DoIHaveSpace(CHAR* pszItemName, DWORD plMaxStackSize, DWORD pdStackSize);
 bool FitInInventory(DWORD pdItemSize);
-bool FitInBank(DWORD pdItemSize);
 LONG SetBOOL(long Cur, PCHAR Val, PCHAR Sec = "", PCHAR Key = "", PCHAR INI = "");
 int CheckIfItemIsLoreByID(int ItemID);
 DWORD FindItemCount(CHAR* pszItemName);
-DWORD FindBarterItemCount(CHAR* pszItemName);
 bool DirectoryExists(LPCTSTR lpszPath);
 void CreateLogEntry(PCHAR szLogEntry);
 void SetAutoLootVariables(void);
@@ -96,6 +100,20 @@ void DoBarterStuff(CHAR* szAction);
 void DoLootStuff(CHAR* szAction);
 void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem);
 void CreateLootINI(void);
+// Functions necessary to deposit/sell/barter items
+bool MoveToNPC(PSPAWNINFO pSpawn);
+bool OpenWindow(PSPAWNINFO pSpawn); 
+bool FitInPersonalBank(PITEMINFO pItem);
+void PutInPersonalBank(PITEMINFO pItem);
+bool CheckGuildBank(PITEMINFO pItem);
+bool PutInGuildBank(PITEMINFO pItem);
+bool DepositItems(PITEMINFO pItem);
+void SetItemPermissions(PITEMINFO pItem);
+DWORD FindBarterItemCount(CHAR* pszItemName);
+DWORD __stdcall BarterStuff(PVOID pData);
+DWORD __stdcall SellStuff(PVOID pData);
+DWORD __stdcall DepositPersonalBanker(PVOID pData);
+DWORD __stdcall DepositGuildBanker(PVOID pData);
 DWORD __stdcall BuyItem(PVOID pData);
 
 #pragma region Inlines
@@ -123,8 +141,7 @@ public:
 		SellActive = 2,
 		DepositActive = 3,
 		BarterActive = 4,
-		SaveBagSlots = 5,
-		FreeBagSlots = 6,
+		FreeInventory = 5,
 	};
 
 	MQ2AutoLootType() :MQ2Type("AutoLoot")
@@ -133,8 +150,7 @@ public:
 		TypeMember(SellActive);
 		TypeMember(DepositActive);
 		TypeMember(BarterActive);
-		TypeMember(SaveBagSlots);
-		TypeMember(FreeBagSlots);
+		TypeMember(FreeInventory);
 	}
 
 	bool GetMember(MQ2VARPTR VarPtr, char* Member, char* Index, MQ2TYPEVAR &Dest)
@@ -160,11 +176,7 @@ public:
 				Dest.DWord = (StartLootStuff && !_stricmp(szLootStuffAction, "Barter"));
 				Dest.Type = pBoolType;
 				return true;
-			case SaveBagSlots:
-				Dest.DWord = iSaveBagSlots;
-				Dest.Type = pIntType;
-				return true;
-			case FreeBagSlots:
+			case FreeInventory:
 				Dest.DWord = AutoLootFreeInventory();
 				Dest.Type = pIntType;
 				return true;
@@ -412,10 +424,10 @@ PLUGIN_API VOID OnPulse(VOID)
 	{
 		if (((PCSIDLWND)(pWnd))->dShow)
 		{
-			if (CStmlWnd* Child = (CStmlWnd*)pWnd->GetChildItem("CD_TextOutput"))
+			if (CXWnd *Child = pWnd->GetChildItem("CD_TextOutput"))
 			{
 				char ConfirmationText[MAX_STRING];
-				GetCXStr(Child->STMLText, ConfirmationText, sizeof(ConfirmationText));
+				GetCXStr(((PCSIDLWND)Child)->SidlText, ConfirmationText, sizeof(ConfirmationText));
 				if (strstr(ConfirmationText, "is a NO DROP item, are you sure you wish to loot it?"))
 				{
 					if (WinState((CXWnd*)pLootWnd))
@@ -1010,7 +1022,7 @@ PLUGIN_API VOID OnPulse(VOID)
 												if (iSpamLootInfo) { WriteChatf(PLUGIN_MSG ":: SList: No one wanted \ag%s\ax setting to leave", pShareItem->Name); }
 												if (iLogLoot)
 												{
-													sprintf_s(szTemp, "%s :: SList: No one wanted %s, leaving it on the corpse", pChar->Name, pShareItem->Name);
+													sprintf_s(szTemp, "%s :: SList: Attempted to pass out %s and no one wanted, leaving it on the corpse", pChar->Name, pShareItem->Name);
 													CreateLogEntry(szTemp);
 												}
 												LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
@@ -1298,6 +1310,8 @@ int AutoLootFreeInventory(void)
 			}
 		}
 	}
+	freeslots = freeslots - iSaveBagSlots;
+	if (freeslots < 0) return 0;
 	return freeslots;
 }
 
@@ -1327,73 +1341,6 @@ bool FitInInventory(DWORD pdItemSize)
 		for (unsigned long nPack = 0; nPack < 10; nPack++)
 		{
 			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
-			{
-				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
-				{
-					if (pItemPack->Type == ITEMTYPE_PACK && (_stricmp(pItemPack->Name, szExcludedBag1) || _stricmp(pItemPack->Name, szExcludedBag2)))
-					{
-						if (pPack->Contents.ContainedItems.pItems)
-						{
-							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
-							{
-								if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
-								{
-
-								}
-								else
-								{
-									if (pItemPack->SizeCapacity >= pdItemSize)
-									{
-										return true;
-									}
-								}
-							}
-						}
-						else
-						{
-							if (pItemPack->SizeCapacity >= pdItemSize)
-							{
-								return true;
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return false;
-}
-
-bool FitInBank(DWORD pdItemSize)
-{
-	bool FitInStack = false;
-	LONG nPack = 0;
-	LONG Count = 0;
-	PCHARINFO pCharInfo = GetCharInfo();
-
-	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
-	{
-		if (pCharInfo->pBankArray)
-		{
-			if (PCONTENTS pItem = pCharInfo->pBankArray->Bank[nPack])
-			{
-			}
-			else
-			{
-				return true;
-			}
-		}
-		else
-		{
-			return true;
-		}
-	}
-	//checking inside bank bags
-	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++) //checking bank slots
-	{
-		if (pCharInfo->pBankArray)
-		{
-			if (PCONTENTS pPack = pCharInfo->pBankArray->Bank[nPack])
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
@@ -1501,7 +1448,8 @@ int CheckIfItemIsLoreByID(int ItemID)
 		}
 	}
 	//check in my bags
-	if (pChar2 && pChar2->pInventoryArray) {
+	if (pChar2 && pChar2->pInventoryArray) 
+	{
 		for (unsigned long nPack = 0; nPack < 10; nPack++)
 		{
 			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
@@ -1542,9 +1490,9 @@ int CheckIfItemIsLoreByID(int ItemID)
 		}
 	}
 	//checking bank slots
-	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
+	if (pCharInfo->pBankArray)
 	{
-		if (pCharInfo->pBankArray)
+		for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
 		{
 			if (PCONTENTS pItem = pCharInfo->pBankArray->Bank[nPack])
 			{
@@ -1936,66 +1884,6 @@ DWORD FindItemCount(CHAR* pszItemName)
 	return Count;
 }
 
-DWORD FindBarterItemCount(CHAR* pszItemName)
-{
-	LONG nPack = 0;
-	DWORD Count = 0;
-	DWORD nAug = 0;
-	PCHARINFO pCharInfo = GetCharInfo();
-	PCHARINFO2 pChar2 = GetCharInfo2();
-	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
-	{
-		for (unsigned long nSlot = 0; nSlot < NUM_INV_SLOTS; nSlot++)
-		{
-			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
-			{
-				if (PITEMINFO theitem = GetItemFromContents(pItem))
-				{
-					if (!_stricmp(pszItemName, theitem->Name))
-					{
-						if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
-							Count++;
-						else
-							Count += pItem->StackCount;
-					}
-				}
-			}
-		}
-	}
-	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
-	{
-		for (unsigned long nPack = 0; nPack < 10; nPack++)
-		{
-			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
-			{
-				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
-				{
-					if (pItemPack->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
-					{
-						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
-						{
-							if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
-							{
-								if (PITEMINFO theitem = GetItemFromContents(pItem))
-								{
-									if (!_stricmp(pszItemName, theitem->Name))
-									{
-										if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
-											Count++;
-										else
-											Count += pItem->StackCount;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return Count;
-}
-
 void DestroyStuff()
 {
 	PCHARINFO pChar = GetCharInfo();
@@ -2066,8 +1954,996 @@ void DestroyStuff()
 	}
 }
 
+DWORD FindBarterItemCount(CHAR* pszItemName)
+{
+	LONG nPack = 0;
+	DWORD Count = 0;
+	DWORD nAug = 0;
+	PCHARINFO pCharInfo = GetCharInfo();
+	PCHARINFO2 pChar2 = GetCharInfo2();
+	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
+	{
+		for (unsigned long nSlot = 0; nSlot < NUM_INV_SLOTS; nSlot++)
+		{
+			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			{
+				if (PITEMINFO theitem = GetItemFromContents(pItem))
+				{
+					if (!_stricmp(pszItemName, theitem->Name))
+					{
+						if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
+							Count++;
+						else
+							Count += pItem->StackCount;
+					}
+				}
+			}
+		}
+	}
+	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
+	{
+		for (unsigned long nPack = 0; nPack < 10; nPack++)
+		{
+			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			{
+				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+				{
+					if (pItemPack->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
+					{
+						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+						{
+							if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+							{
+								if (PITEMINFO theitem = GetItemFromContents(pItem))
+								{
+									if (!_stricmp(pszItemName, theitem->Name))
+									{
+										if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
+											Count++;
+										else
+											Count += pItem->StackCount;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return Count;
+}
+
+bool MoveToNPC(PSPAWNINFO pSpawn)
+{
+	if (!InGameOK() || bEndThreads)
+	{
+		bEndThreads = true;
+		return false;
+	}
+	PCHARINFO pChar = GetCharInfo();
+	if (pSpawn->X && pSpawn->Y && pSpawn->Z)
+	{
+		FLOAT Distance = Get3DDistance(pChar->pSpawn->X, pChar->pSpawn->Y, pChar->pSpawn->Z, pSpawn->X, pSpawn->Y, pSpawn->Z);
+		if (Distance >= 20)  // I am too far away from the merchant/banker and need to move closer 
+		{
+			if (HandleMoveUtils())
+			{
+				sprintf_s(szCommand, "id %d", pSpawn->SpawnID);
+				fStickCommand(GetCharInfo()->pSpawn, szCommand);
+				WriteChatf(PLUGIN_MSG ":: Moving towards: \ag%s\ax", pSpawn->DisplayedName);
+			}
+			else
+			{
+				WriteChatf(PLUGIN_MSG ":: Hey friend, you don't have MQ2MoveUtils loaded.  Move to within 20 of the target before trying to sell or deposit");
+				return false;
+			}
+			pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(30); // Will wait up to 30 seconds or until you are within 20 of the guild banker
+			while (pluginclock::now() < WhileTimer) // While loop to wait for npc to aggro me while i'm casting
+			{
+				if (!InGameOK() || bEndThreads) return false; // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+				if (pSpawn->X && pSpawn->Y && pSpawn->Z)
+				{
+					FLOAT Distance = Get3DDistance(pChar->pSpawn->X, pChar->pSpawn->Y, pChar->pSpawn->Z, pSpawn->X, pSpawn->Y, pSpawn->Z);
+					if (Distance < 20) break; // I am close enough to the banker I can stop moving towards them 
+				}
+				else
+				{
+					WriteChatf(PLUGIN_MSG ":: For some reason I can't find the distance to my banker/merchant!");
+					return false;
+				}
+				Sleep(100);
+			}
+			Sleep(100); // Lets give us another 100 ms before to stick off
+			if (!InGameOK() || bEndThreads) return false; // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+			if (*pbStickOn) fStickCommand(GetCharInfo()->pSpawn, "off");  // We either got close enough or timed out, lets turn stick off
+			if (pSpawn->X && pSpawn->Y && pSpawn->Z)
+			{
+				FLOAT Distance = Get3DDistance(pChar->pSpawn->X, pChar->pSpawn->Y, pChar->pSpawn->Z, pSpawn->X, pSpawn->Y, pSpawn->Z);
+				if (Distance < 20)
+				{
+					return true; // I am close enough to the banker/merchant to open their window
+				}
+				else
+				{
+					WriteChatf(PLUGIN_MSG ":: I wasn't able to get to within 20 of my banker/merchant!");
+					return false;
+				}
+			}
+			else
+			{
+				WriteChatf(PLUGIN_MSG ":: For some reason I can't find the distance to !");
+				return false;
+			}
+		}
+		else
+		{
+			return true; // Hey you already were within 20 of the spawn
+		}
+	}
+	else
+	{
+		WriteChatf(PLUGIN_MSG ":: For some reason I can't find the distance to your npc!");
+		return false; // This shouldn't fail, but for some reason I wasn't able to get the location of the spawn I want to navigate to
+	}
+}
+
+bool OpenWindow(PSPAWNINFO pSpawn)
+{
+	if (!InGameOK() || bEndThreads)
+	{
+		bEndThreads = true;
+		return false;
+	}
+	PCHARINFO pChar = GetCharInfo();
+	if (PSPAWNINFO psTarget = (PSPAWNINFO)pTarget)
+	{
+		if (psTarget->SpawnID == pSpawn->SpawnID)
+		{
+			if (pSpawn->mActorClient.Class == MERCHANT_CLASS) WriteChatf(PLUGIN_MSG ":: Opening merchant window and waiting 10 seconds for the merchant window to populate");
+			if (pSpawn->mActorClient.Class == PERSONALBANKER_CLASS) WriteChatf(PLUGIN_MSG ":: Opening personal banking window and waiting 10 seconds for the guild banking window to populate");
+			if (pSpawn->mActorClient.Class == GUILDBANKER_CLASS) WriteChatf(PLUGIN_MSG ":: Opening guild banking window and waiting 10 seconds for the guild banking window to populate");
+			DoCommand(GetCharInfo()->pSpawn, "/face nolook");
+			DoCommand(GetCharInfo()->pSpawn, "/nomodkey /click right target");
+			pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
+			while (pluginclock::now() < WhileTimer) // While loop to wait for something to pop onto my cursor
+			{
+				if (!InGameOK() || bEndThreads) // If we aren't in a proper game state, or if they sent /autoloot command we want to bug out
+				{
+					bEndThreads = true;
+					return false;
+				}
+				if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd")) || WinState((CXWnd*)pBankWnd) || WinState((CXWnd*)pMerchantWnd)) return true;
+				Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
+			}
+			return false;
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Your target has changed!");
+			bDepositActive = false;
+			bEndThreads = true;
+			return false;
+		}
+	}
+	else
+	{
+		WriteChatf(PLUGIN_MSG ":: You don't have a target!");
+		bDepositActive = false;
+		bEndThreads = true;
+		return false;
+	}
+}
+
+bool FitInPersonalBank(PITEMINFO pItem)
+{
+	bool FitInStack = false;
+	LONG nPack = 0;
+	LONG Count = 0;
+	PCHARINFO pChar = GetCharInfo();
+	CHAR INISection[MAX_STRING] = { 0 };
+	CHAR Value[MAX_STRING] = { 0 };
+	sprintf_s(INISection, "%c", pItem->Name[0]);
+	//WriteChatf(PLUGIN_MSG ":: Checking if %s should be put into my bank", pItem->Name);
+	if (GetPrivateProfileString(INISection, pItem->Name, 0, Value, MAX_STRING, szLootINI) != 0)
+	{
+		CHAR *pParsedToken = NULL;
+		CHAR *pParsedValue = strtok_s(Value, "|", &pParsedToken);
+		if (_stricmp(pParsedValue, "Keep")) return false; // The item isn't set to Keep
+	}
+	else
+	{
+		return false;  // The item isn't in your loot.ini file
+	}
+	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
+	{
+		if (pChar->pBankArray)
+		{
+			if (!pChar->pBankArray->Bank[nPack]) return true;
+		}
+		else
+		{
+			return true;
+		}
+	}
+	//checking inside bank bags
+	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++) //checking bank slots
+	{
+		if (pChar->pBankArray)
+		{
+			if (PCONTENTS pPack = pChar->pBankArray->Bank[nPack])
+			{
+				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+				{
+					if (pItemPack->Type == ITEMTYPE_PACK && (_stricmp(pItemPack->Name, szExcludedBag1) || _stricmp(pItemPack->Name, szExcludedBag2)))
+					{
+						if (pPack->Contents.ContainedItems.pItems)
+						{
+							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+							{
+								if (!pPack->Contents.ContainedItems.pItems->Item[nItem])
+								{
+									if (pItemPack->SizeCapacity >= pItem->Size) return true; // This bag slot is empty and out item fits
+								}
+							}
+						}
+						else
+						{
+							if (pItemPack->SizeCapacity >= pItem->Size) return true; // The bag array is empty, this means it was never initialized and thus should be empty
+						}
+					}
+				}
+			}
+		}
+	}
+	return false;
+}
+
+void PutInPersonalBank(PITEMINFO pItem)
+{
+	if (!InGameOK() || bEndThreads)
+	{
+		bEndThreads = true;
+		return;
+	}
+	PCHARINFO2 pChar2 = GetCharInfo2();
+	if (pItem->Name)
+	{
+		sprintf_s(szCommand, "/nomodkey /itemnotify \"%s\" leftmouseup", pItem->Name);
+		DoCommand(GetCharInfo()->pSpawn, szCommand);
+		pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
+		while (pluginclock::now() < WhileTimer) // While loop to wait for something to pop onto my cursor
+		{
+			if (!InGameOK() || bEndThreads) // If we aren't in a proper game state, or if they sent /autoloot command we want to bug out
+			{
+				bEndThreads = true;
+				return;
+			}
+			if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor) break;
+			Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
+		}
+		Sleep(100); // TODO s
+		if (!pChar2->pInventoryArray || !pChar2->pInventoryArray->Inventory.Cursor) bEndThreads = true;
+		if (!InGameOK() || bEndThreads)
+		{
+			bEndThreads = true;
+			return;
+		}
+		if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
+		{
+			if (PCONTENTS pItem = pChar2->pInventoryArray->Inventory.Cursor)
+			{
+				if (WinState((CXWnd*)pBankWnd))
+				{
+					if (CXWnd *pWndButton = pBankWnd->GetChildItem("BIGB_AutoButton"))
+					{
+						if (FitInPersonalBank(GetItemFromContents(pItem)))
+						{
+							if (iSpamLootInfo) { WriteChatf(PLUGIN_MSG ":: Putting \ag%s\ax into my personal bank", pItem->Item2->Name); }
+							SendWndClick2(pWndButton, "leftmouseup");
+							Sleep(1000);
+							return;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+bool CheckGuildBank(PITEMINFO pItem)
+{
+	if (!InGameOK() || bEndThreads)
+	{
+		bEndThreads = true;
+		return false;
+	}
+	CHAR INISection[MAX_STRING] = { 0 };
+	CHAR Value[MAX_STRING] = { 0 };
+	sprintf_s(INISection, "%c", pItem->Name[0]);
+	if (GetPrivateProfileString(INISection, pItem->Name, 0, Value, MAX_STRING, szLootINI) != 0)
+	{
+		CHAR *pParsedToken = NULL;
+		CHAR *pParsedValue = strtok_s(Value, "|", &pParsedToken);
+		if (!_stricmp(pParsedValue, "Deposit"))
+		{
+			if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
+			{
+				if (CXWnd *pWnd = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_DepositCountLabel"))
+				{
+					CHAR szDepositCountText[MAX_STRING] = { 0 };
+					GetCXStr(pWnd->WindowText, szDepositCountText, MAX_STRING);
+					CHAR *pParsedToken = NULL;
+					CHAR *pParsedValue = strtok_s(szDepositCountText, ":", &pParsedToken);
+					pParsedValue = strtok_s(NULL, ":", &pParsedToken);
+					DWORD SlotsLeft = atoi(pParsedValue);
+					WriteChatf(PLUGIN_MSG ":: The number of items left that can be deposited is: %d", SlotsLeft);
+					bool bLoreItem = false;
+					if (pItem->Lore != 0)
+					{
+						CXStr	cxstrItemName;
+						CHAR	szItemName[MAX_STRING] = { 0 };
+						if (CListWnd *cLWnd = (CListWnd *)FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_DepositList"))
+						{
+							if (cLWnd->ItemsArray.GetLength() > 0)
+							{
+								for (int nDepositList = 0; nDepositList < cLWnd->ItemsArray.GetLength(); nDepositList++)
+								{
+									if (cLWnd->GetItemText(&cxstrItemName, nDepositList, 1))
+									{
+										GetCXStr(cxstrItemName.Ptr, szItemName, MAX_STRING);
+										if (!_stricmp(szItemName, pItem->Name)) bLoreItem = true;  // A item with the same name is already deposited
+									}
+								}
+							}
+						}
+						if (CListWnd *cLWnd = (CListWnd *)FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_ItemList"))
+						{
+							if (cLWnd->ItemsArray.GetLength() > 0)
+							{
+								for (int nItemList = 0; nItemList < cLWnd->ItemsArray.GetLength(); nItemList++)
+								{
+									if (cLWnd->GetItemText(&cxstrItemName, nItemList, 1))
+									{
+										GetCXStr(cxstrItemName.Ptr, szItemName, MAX_STRING);
+										if (!_stricmp(szItemName, pItem->Name)) bLoreItem = true;  // A item with the same name is already deposited
+									}
+								}
+							}
+						}
+					}
+					if (!bLoreItem)
+					{
+						if (SlotsLeft > 0)
+						{
+							return true;
+						}
+						else
+						{
+							WriteChatf(PLUGIN_MSG ":: Your guild bank ran out of space, closing guild bank window");
+							bEndThreads = true;
+							return false;
+						}
+					}
+					else
+					{
+						WriteChatf(PLUGIN_MSG ":: %s is lore and you have one already in your guild bank, skipping depositing.", pItem->Name);
+						DoCommand(GetCharInfo()->pSpawn, "/autoinventory");
+						Sleep(1000); // TODO figure out what to wait for so I don't have to hardcode this long of a delay
+						return false;
+					}
+				}
+				else // The guild bank window doesn't have a deposit button
+				{
+					WriteChatf(PLUGIN_MSG ":: I can't find your deposit button on your guild bank window");
+					bEndThreads = true;
+					return false;
+				}
+			}
+			else // Guild Bank Window isn't open, bugging out of this thread
+			{
+				WriteChatf(PLUGIN_MSG ":: Your guild bank window is closed for some reason");
+				bEndThreads = true;
+				return false;
+			}
+		}
+		else // The item isn't set to be deposited, moving onto the next item
+		{
+			return false;
+		}
+	}
+	else // The item isn't in loot.ini file, moving onto the next item
+	{
+		return false;
+	}
+}
+
+bool DepositItems(PITEMINFO pItem)  //This should only be run from inside threads
+{
+	WriteChatf(PLUGIN_MSG ":: DepositItems");
+	if (!InGameOK() || bEndThreads)  // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+	{
+		bEndThreads = true;
+		return false;
+	}
+	sprintf_s(szCommand, "/nomodkey /itemnotify \"%s\" leftmouseup", pItem->Name);  // Picking up the item
+	DoCommand(GetCharInfo()->pSpawn, szCommand);
+	PCHARINFO2 pChar2 = GetCharInfo2();
+	if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
+	{
+		pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
+		while (pluginclock::now() < WhileTimer) // While loop to wait for something to pop onto my cursor
+		{
+			if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+			{
+				bEndThreads = true;
+				return false;
+			}
+			if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
+			{
+				if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_DepositButton"))
+				{
+					if (pWndButton->Enabled) break;
+				}
+			}
+			Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
+		}
+		if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+		{
+			bEndThreads = true;
+			return false;
+		}
+		if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_DepositButton"))
+		{
+			if (!pWndButton->Enabled)
+			{
+				WriteChatf(PLUGIN_MSG ":: Whoa the deposit button isn't ready, most likely you don't have the correct rights");
+				DoCommand(GetCharInfo()->pSpawn, "/autoinventory");
+				bEndThreads = true;
+				return false;
+			}
+			else
+			{
+				if (pChar2->pInventoryArray)
+				{
+					if (PCONTENTS pItem = pChar2->pInventoryArray->Inventory.Cursor)
+					{
+						if (iSpamLootInfo) { WriteChatf(PLUGIN_MSG ":: Putting \ag%s\ax into my guild bank", pItem->Item2->Name); }
+						SendWndClick2(pWndButton, "leftmouseup");
+						Sleep(2000); // TODO figure out what to wait for so I don't have to hardcode this long of a delay
+						return true;
+					}
+				}
+			}
+		}
+	}
+	else if (WinState((CXWnd*)pBankWnd))
+	{
+		Sleep(500); // TODO check if this is necessary
+		pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
+		while (pluginclock::now() < WhileTimer) // While loop to wait for something to pop onto my cursor
+		{
+			if (!InGameOK() || bEndThreads) return false; // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+			if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor) break;  // Ok we got shit on our cursor, time to stop this while loop
+			Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
+		}
+		Sleep(100);  //TODO check if this is necessary
+	}
+	else // Hey I don't have either the guild/personal bank open, bugging out
+	{
+		WriteChatf(PLUGIN_MSG ":: You don't have any banker window open, stopping depositing items");
+		bEndThreads = true;
+		return false;
+	}
+	WriteChatf(PLUGIN_MSG ":: The function DepositItems failed, stopping depositing items");
+	bEndThreads = true;
+	return false;  // Shit for some reason I got to this point, going to bail on depositing items
+}
+
+bool PutInGuildBank(PITEMINFO pItem)
+{
+	CXStr	cxstrItemName;
+	CHAR	szItemName[MAX_STRING] = { 0 };
+	if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
+	{
+		if (CListWnd *cLWnd = (CListWnd *)FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_DepositList"))
+		{
+			if (cLWnd->ItemsArray.GetLength() > 0)
+			{
+				for (int nDepositList = 0; nDepositList < cLWnd->ItemsArray.GetLength(); nDepositList++)
+				{
+					if (cLWnd->GetItemText(&cxstrItemName, nDepositList, 1))
+					{
+						GetCXStr(cxstrItemName.Ptr, szItemName, MAX_STRING);
+						if (!_stricmp(szItemName, pItem->Name))
+						{
+							if (cLWnd->GetCurSel() != nDepositList) SendListSelect("GuildBankWnd", "GBANK_DepositList", nDepositList);
+							pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until you select the right item
+							while (pluginclock::now() < WhileTimer) // While loop to wait till you select the right item
+							{
+								if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+								{
+									bEndThreads = true;
+									return false;
+								}
+								if (cLWnd->GetCurSel() == nDepositList) break;
+								Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
+							}
+							if (cLWnd->GetCurSel() != nDepositList) bEndThreads = true;  // Lets end this thread we weren't able to select the right item
+							WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until your promote button is enabled
+							while (pluginclock::now() < WhileTimer) // Will wait up to 10 seconds or until your promote button is enabled
+							{
+								if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+								{
+									bEndThreads = true;
+									return false;
+								}
+								if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
+								{
+									if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_PromoteButton"))
+									{
+										if (pWndButton->Enabled) break;
+									}
+								}
+								Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
+							}
+							if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+							{
+								bEndThreads = true;
+								return false;
+							}
+							if (CXWnd *pWnd = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_BankCountLabel"))
+							{
+								CHAR szBankCountText[MAX_STRING] = { 0 };
+								GetCXStr(pWnd->WindowText, szBankCountText, MAX_STRING);
+								CHAR *pParsedToken = NULL;
+								CHAR *pParsedValue = strtok_s(szBankCountText, ":", &pParsedToken);
+								pParsedValue = strtok_s(NULL, ":", &pParsedToken);
+								DWORD SlotsLeft = atoi(pParsedValue);
+								WriteChatf(PLUGIN_MSG ":: The number of items left that can be promoted is: %d", SlotsLeft);
+								if (SlotsLeft > 0)
+								{
+									if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_PromoteButton"))
+									{
+										if (pWndButton->Enabled)
+										{
+											WriteChatf(PLUGIN_MSG ":: Promiting shit");
+											SendWndClick2(pWndButton, "leftmouseup");
+											Sleep(2000); // TODO figure out what to wait for so I don't have to hardcode this long of a delay
+											return true;
+										}
+										else
+										{
+											WriteChatf(PLUGIN_MSG ":: Whoa the promote button isn't ready, most likely you don't have the correct rights");
+											bEndThreads = true;
+											return false;
+										}
+									}
+									else
+									{
+										WriteChatf(PLUGIN_MSG ":: Whoa I can't find the promote button");
+										bEndThreads = true;
+										return false;
+									}
+								}
+								else // You ran out of space to promote items into your guild bank
+								{
+									return false;
+								}
+
+							}
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Your guild bank doesn't have a deposit list");
+			bEndThreads = true;
+			return false;
+		}
+	}
+	else
+	{
+		WriteChatf(PLUGIN_MSG ":: You don't have your guild bank window open anymore");
+		bEndThreads = true;
+		return false;
+	}	
+	return false;
+}
+
+void SetItemPermissions(PITEMINFO pItem)
+{
+	CXStr	cxstrItemName;
+	CHAR	szItemName[MAX_STRING] = { 0 };
+	CXStr	cxstrItemPermission;
+	CHAR	szItemPermission[MAX_STRING] = { 0 };
+	if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
+	{
+		if (CListWnd *cLWnd = (CListWnd *)FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_ItemList"))
+		{
+			if (cLWnd->ItemsArray.GetLength() > 0)
+			{
+				for (int nItemList = 0; nItemList < cLWnd->ItemsArray.GetLength(); nItemList++)
+				{
+					if (cLWnd->GetItemText(&cxstrItemName, nItemList, 1))
+					{
+						GetCXStr(cxstrItemName.Ptr, szItemName, MAX_STRING);
+						if (!_stricmp(szItemName, pItem->Name))
+						{
+							if (cLWnd->GetItemText(&cxstrItemPermission, nItemList, 3))
+							{
+								GetCXStr(cxstrItemPermission.Ptr, szItemPermission, MAX_STRING);
+								if (_stricmp(szItemPermission, szGuildItemPermission)) // If permissions don't match lets fix that
+								{
+									if (cLWnd->GetCurSel() != nItemList) SendListSelect("GuildBankWnd", "GBANK_DepositList", nItemList);
+									pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until you select the right item
+									while (pluginclock::now() < WhileTimer) // While loop to wait till you select the right item
+									{
+										if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+										{
+											bEndThreads = true;
+											return;
+										}
+										if (cLWnd->GetCurSel() == nItemList) break;
+										Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
+									}
+									if (cLWnd->GetCurSel() != nItemList) bEndThreads = true;  // Lets end this thread we weren't able to select the right item
+									WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until your permission button is enabled
+									while (pluginclock::now() < WhileTimer) // Will wait up to 10 seconds or until your permission button is enabled
+									{
+										if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+										{
+											bEndThreads = true;
+											return;
+										}
+										if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
+										{
+											if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_PermissionCombo"))
+											{
+												if (pWndButton->Enabled) break; // TODO see if this works
+											}
+										}
+										Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
+									}
+									if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
+									{
+										bEndThreads = true;
+										return;
+									}
+									if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_PermissionCombo"))
+									{
+										if (pWndButton->Enabled)
+										{
+											if (!_stricmp(szGuildItemPermission, "View Only")) SendComboSelect("GuildBankWnd", "GBANK_PermissionCombo", 0);
+											if (!_stricmp(szGuildItemPermission, "Public If Usable")) SendComboSelect("GuildBankWnd", "GBANK_PermissionCombo", 2);
+											if (!_stricmp(szGuildItemPermission, "Public")) SendComboSelect("GuildBankWnd", "GBANK_PermissionCombo", 3);
+											WriteChatf(PLUGIN_MSG ":: Promiting shit");
+											SendWndClick2(pWndButton, "leftmouseup");
+											Sleep(2000); // TODO figure out a more elegant way of doing this
+											return;
+										}
+										else
+										{
+											WriteChatf(PLUGIN_MSG ":: Whoa the permission button isn't ready, most likely you don't have the correct rights");
+											bEndThreads = true;
+											return;
+										}
+									}
+									else
+									{
+										WriteChatf(PLUGIN_MSG ":: Whoa I can't find the permission button");
+										bEndThreads = true;
+										return;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Your guild bank doesn't have a deposit list");
+			bEndThreads = true;
+			return;
+		}
+	}
+	else
+	{
+		WriteChatf(PLUGIN_MSG ":: You don't have your guild bank window open anymore");
+		bEndThreads = true;
+		return;
+	}
+	return;
+}
+
+DWORD __stdcall BarterStuff(PVOID pData)
+{
+	return 0;
+}
+
+DWORD __stdcall SellStuff(PVOID pData)
+{
+	return 0;
+}
+
+DWORD __stdcall DepositPersonalBanker(PVOID pData)
+{
+	bEndThreads = false;
+	bDepositActive = true;
+	if (!InGameOK() || bEndThreads) return 0;
+	PCHARINFO pChar = GetCharInfo();
+	PCHARINFO2 pChar2 = GetCharInfo2();
+	CHAR INISection[MAX_STRING] = { 0 };
+	CHAR Value[MAX_STRING] = { 0 };
+	if (!WinState((CXWnd*)pBankWnd))  // I don't have the guild bank window open
+	{
+		if (PSPAWNINFO psTarget = (PSPAWNINFO)pTarget)
+		{
+			if (psTarget->mActorClient.Class != PERSONALBANKER_CLASS)
+			{
+				WriteChatf(PLUGIN_MSG ":: Please target a personal banker!");
+				bDepositActive = false;
+				bEndThreads = true;
+				return 0;
+			}
+			if (MoveToNPC(psTarget))
+			{
+				if (OpenWindow(psTarget))
+				{
+					Sleep(2000);  // Sleep for 2 seconds to wait for shit to populate once the window is open
+				}
+				else
+				{
+					WriteChatf(PLUGIN_MSG ":: You failed to open your personal bank window!!");
+					bDepositActive = false;
+					bEndThreads = true;
+					return 0;
+				}
+			}
+			else
+			{
+				WriteChatf(PLUGIN_MSG ":: You failed to get within range of your personal banker!!"); // This shouldn't fail since it was checked before you entered this thread
+				bDepositActive = false;
+				bEndThreads = true;
+				return 0;
+			}
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Please target a personal banker!"); // This shouldn't fail since it was checked before you entered this thread
+			bDepositActive = false;
+			bEndThreads = true;
+			return 0;
+		}
+	}
+	if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pBankWnd))  // If we aren't in a proper game state, or if they sent /autoloot deposit again we want to bug out
+	{
+		if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate BigBankWnd close");
+		bDepositActive = false;
+		bEndThreads = true;
+		return 0;
+	}
+	DoCommand(GetCharInfo()->pSpawn, "/keypress OPEN_INV_BAGS"); // TODO check if this is necessary
+	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
+	{
+		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++) // loop through my inventory
+		{
+			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			{
+				if (PITEMINFO theitem = GetItemFromContents(pItem))
+				{
+					if (FitInPersonalBank(theitem))
+					{
+						PutInPersonalBank(theitem);
+					}
+					if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pBankWnd))
+					{
+						if (WinState((CXWnd*)pBankWnd)) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate BigBankWnd close");
+						bDepositActive = false;
+						bEndThreads = true;
+						return 0;
+					}
+				}
+			}
+		}
+	}
+	if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pBankWnd))  // This shouldn't be necessary
+	{
+		if (WinState((CXWnd*)pBankWnd)) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate BigBankWnd close");
+		bDepositActive = false;
+		bEndThreads = true;
+		return 0;
+	}
+	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
+	{
+		for (unsigned long nPack = 0; nPack < 10; nPack++)
+		{
+			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			{
+				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+				{
+					if (pItemPack->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
+					{
+						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+						{
+							if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+							{
+								if (PITEMINFO theitem = GetItemFromContents(pItem))
+								{
+									if (FitInPersonalBank(theitem))
+									{
+										PutInPersonalBank(theitem);
+									}
+									if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pBankWnd))
+									{
+										if (WinState((CXWnd*)pBankWnd)) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate BigBankWnd close");
+										bDepositActive = false;
+										bEndThreads = true;
+										return 0;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if (WinState((CXWnd*)pBankWnd)) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate BigBankWnd close");
+	bDepositActive = false;
+	bEndThreads = true;
+	return 0;
+}
+
+DWORD __stdcall DepositGuildBanker(PVOID pData)
+{
+	bEndThreads = false;
+	bDepositActive = true;
+	if (!InGameOK() || bEndThreads) return 0;
+	PCHARINFO pChar = GetCharInfo();
+	PCHARINFO2 pChar2 = GetCharInfo2();
+	CHAR INISection[MAX_STRING] = { 0 };
+	CHAR Value[MAX_STRING] = { 0 };
+	if (!WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))  // I don't have the guild bank window open
+	{
+		if (PSPAWNINFO psTarget = (PSPAWNINFO)pTarget)
+		{
+			if (psTarget->mActorClient.Class != GUILDBANKER_CLASS)
+			{
+				WriteChatf(PLUGIN_MSG ":: Please target a guild banker!");
+				bDepositActive = false;
+				bEndThreads = true;
+				return 0;
+			}
+			if (MoveToNPC(psTarget))
+			{
+				if (OpenWindow(psTarget))
+				{
+					Sleep(2000);  // Sleep for 2 seconds to wait for shit to populate once the window is open
+				}
+				else
+				{
+					WriteChatf(PLUGIN_MSG ":: You failed to open your guild bank window!!");
+					bDepositActive = false;
+					bEndThreads = true;
+					return 0;
+				}
+			}
+			else
+			{
+				WriteChatf(PLUGIN_MSG ":: You failed to get within range of your guild banker!!"); // This shouldn't fail since it was checked before you entered this thread
+				bDepositActive = false;
+				bEndThreads = true;
+				return 0;
+			}
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Please target a guild banker!"); // This shouldn't fail since it was checked before you entered this thread
+			bDepositActive = false;
+			bEndThreads = true;
+			return 0;
+		}
+	}
+	if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))  // If we aren't in a proper game state, or if they sent /autoloot deposit again we want to bug out
+	{
+		if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate GuildBankWnd close");
+		bDepositActive = false;
+		bEndThreads = true;
+		return 0;
+	}
+	DoCommand(GetCharInfo()->pSpawn, "/keypress OPEN_INV_BAGS"); // TODO check if this is necessary
+	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
+	{
+		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++) // loop through my inventory
+		{
+			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			{
+				if (PITEMINFO theitem = GetItemFromContents(pItem))
+				{
+					if (CheckGuildBank(theitem))
+					{
+						if (DepositItems(theitem))
+						{
+							if (PutInGuildBank(theitem))
+							{
+								SetItemPermissions(theitem);
+							}
+						}
+					}
+					if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
+					{
+						if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate GuildBankWnd close");
+						bDepositActive = false;
+						bEndThreads = true;
+						return 0;
+					}
+				}
+			}
+		}
+	}
+	if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))  // This shouldn't be necessary
+	{
+		if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate GuildBankWnd close");
+		bDepositActive = false;
+		bEndThreads = true;
+		return 0;
+	}
+	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
+	{
+		for (unsigned long nPack = 0; nPack < 10; nPack++)
+		{
+			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			{
+				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+				{
+					if (pItemPack->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
+					{
+						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+						{
+							if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+							{
+								if (PITEMINFO theitem = GetItemFromContents(pItem))
+								{
+									if (CheckGuildBank(theitem))
+									{
+										if (DepositItems(theitem))
+										{
+											if (PutInGuildBank(theitem))
+											{
+												SetItemPermissions(theitem);
+											}
+										}
+									}
+									if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
+									{
+										if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate GuildBankWnd close");
+										bDepositActive = false;
+										bEndThreads = true;
+										return 0;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if (WinState((CXWnd*)FindMQ2Window("GuildBankWnd"))) DoCommand(GetCharInfo()->pSpawn, "/squelch /windowstate GuildBankWnd close");
+	bDepositActive = false;
+	bEndThreads = true;
+	return 0;
+}
+
 DWORD __stdcall BuyItem(PVOID pData)
 {
+	bBuyActive = true;
+	bEndThreads = false;
 	int  iItemCount;
 	int  iMaxItemCount;
 	int	 iBuyItemCount;
@@ -2100,14 +2976,16 @@ DWORD __stdcall BuyItem(PVOID pData)
 							GetCXStr(cxstrItemName.Ptr, szItemName, MAX_STRING);
 							if (!_stricmp(szItemToBuy, szItemName))
 							{
-
-								if (cLWnd->GetCurSel() != nMerchantItems)
+								if (cLWnd->GetCurSel() != nMerchantItems) SendListSelect("MerchantWnd", "MW_ItemList", nMerchantItems); // If we haven't selected the right item, send the cursor there
+								while (cLWnd->GetCurSel() != nMerchantItems)  // Wait for the cursor to be placed at the right item
 								{
-									SendListSelect("MerchantWnd", "MW_ItemList", nMerchantItems);
-								}
-								while (cLWnd->GetCurSel() != nMerchantItems)
-								{
-									if (!WinState((CXWnd*)pMerchantWnd)) return 0;
+									if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
+									{
+										bBuyActive = false;
+										bEndThreads = true;
+										return 0;
+									}
+									Sleep(100);
 								}
 								if (cLWnd->GetItemText(&cxstrItemCount, nMerchantItems, 2))
 								{
@@ -2122,17 +3000,24 @@ DWORD __stdcall BuyItem(PVOID pData)
 									}
 									while (iItemCount > 0)
 									{
-										if (!WinState((CXWnd*)pMerchantWnd)) return 0;
+										if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
+										{
+											bBuyActive = false;
+											bEndThreads = true;
+											return 0;
+										}
 										if (CXWnd *pWndButton = FindMQ2Window("MerchantWnd")->GetChildItem("MW_Buy_Button"))
 										{
-											if (pWndButton->Enabled)
-											{
-												SendWndClick2(pWndButton, "leftmouseup");
-											}
+											if (pWndButton->Enabled) SendWndClick2(pWndButton, "leftmouseup");
 										}
-										while (!WinState((CXWnd*)pQuantityWnd))
+										while (!WinState((CXWnd*)pQuantityWnd)) // wait for the quantity window to pop up
 										{
-											if (!WinState((CXWnd*)pMerchantWnd)) return 0;
+											if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
+											{
+												bBuyActive = false;
+												bEndThreads = true;
+												return 0;
+											}
 											Sleep(100);
 										}
 										if (WinState((CXWnd*)pQuantityWnd))
@@ -2143,23 +3028,22 @@ DWORD __stdcall BuyItem(PVOID pData)
 												if (IsNumber(szBuyItemCount))
 												{
 													iBuyItemCount = atoi(szBuyItemCount);
-													if (iItemCount < iBuyItemCount)
-													{
-														iBuyItemCount = iItemCount;
-													}
+													if (iItemCount < iBuyItemCount)	iBuyItemCount = iItemCount; // 
 													SendWndNotification("QuantityWnd", "QTYW_Slider", 14, (void*)iBuyItemCount); //newvalue = 14
-													while (iBuyItemCount != atoi(szBuyItemCount))
+													while (iBuyItemCount != atoi(szBuyItemCount))  // Wait for the purchase ammount to update to the new value
 													{
-														if (!WinState((CXWnd*)pMerchantWnd)) return 0;
+														if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
+														{
+															bBuyActive = false;
+															bEndThreads = true;
+															return 0;
+														}
 														Sleep(100);
 														GetCXStr(pWndInput->WindowText, szBuyItemCount, MAX_STRING);
 													}
 													if (CXWnd *pWndButton = pQuantityWnd->GetChildItem("QTYW_Accept_Button"))
 													{
-														if (pWndButton->Enabled)
-														{
-															SendWndClick2(pWndButton, "leftmouseup");
-														}
+														if (pWndButton->Enabled) SendWndClick2(pWndButton, "leftmouseup");
 													}
 													iItemCount = iItemCount - iBuyItemCount;
 													WriteChatf(PLUGIN_MSG ":: \ag%d\ax to buy of \ag%s\ax!", iItemCount, szItemToBuy);
@@ -2180,12 +3064,13 @@ DWORD __stdcall BuyItem(PVOID pData)
 			WriteChatf(PLUGIN_MSG ":: Please open a merchant window first before attempting to buy: \ag%s\ax", szItemToBuy);
 		}
 	}
+	bBuyActive = false;
+	bEndThreads = true;
 	return 0;
 }
 
 void DoBarterStuff(CHAR* szAction)
 {
-
 	CHAR INISection[MAX_STRING] = { 0 };
 	CHAR Value[MAX_STRING] = { 0 };
 	PCHARINFO pChar = GetCharInfo();
@@ -2485,7 +3370,6 @@ void DoBarterStuff(CHAR* szAction)
 
 void DoLootStuff(CHAR* szAction)
 {
-
 	CHAR INISection[MAX_STRING] = { 0 };
 	CHAR Value[MAX_STRING] = { 0 };
 	PCHARINFO pChar = GetCharInfo();
@@ -2601,7 +3485,7 @@ void DoLootStuff(CHAR* szAction)
 				{
 					if (CXWnd *pWndButton = pBankWnd->GetChildItem("BIGB_AutoButton"))
 					{
-						if (FitInBank(pItem->Item2->Size))
+						if (FitInPersonalBank(GetItemFromContents(pItem)))
 						{
 							if (iSpamLootInfo) { WriteChatf(PLUGIN_MSG ":: Putting \ag%s\ax into my personal bank", pItem->Item2->Name); }
 							SendWndClick2(pWndButton, "leftmouseup");
@@ -2658,7 +3542,7 @@ void DoLootStuff(CHAR* szAction)
 							{
 								if (WinState((CXWnd*)pBankWnd))
 								{
-									if (FitInBank(theitem->Size))
+									if (FitInPersonalBank(theitem))
 									{
 										sprintf_s(szCommand, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
 										DoCommand(GetCharInfo()->pSpawn, szCommand);
@@ -2766,7 +3650,7 @@ void DoLootStuff(CHAR* szAction)
 											{
 												if (WinState((CXWnd*)pBankWnd))
 												{
-													if (FitInBank(theitem->Size))
+													if (FitInPersonalBank(theitem))
 													{
 														if (iSpamLootInfo) { WriteChatf(PLUGIN_MSG ":: Picking up \ag%s\ax", theitem->Name); }
 														sprintf_s(szCommand, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
@@ -2887,7 +3771,7 @@ void DoLootStuff(CHAR* szAction)
 void SetAutoLootVariables()
 {
 	sprintf_s(INIFileName, "%s\\%s.ini", gszINIPath, PLUGIN_NAME);
-	sprintf_s(szLogPath, "%sLog\\", gszLogPath);
+	sprintf_s(szLogPath, "%s\\", gszLogPath);
 	sprintf_s(szLogFileName, "%sLoot_Log.log", szLogPath);
 	iUseAutoLoot = GetPrivateProfileInt(GetCharInfo()->Name, "UseAutoLoot", 1, INIFileName);
 	if (GetPrivateProfileString(GetCharInfo()->Name, "lootini", 0, szLootINI, MAX_STRING, INIFileName) == 0)
@@ -2960,6 +3844,11 @@ void SetAutoLootVariables()
 		sprintf_s(szExcludedBag2, "Extraplanar Trade Satchel");
 		WritePrivateProfileString("Settings", "ExcludeBag2", szExcludedBag2, szLootINI);
 	}
+	if (GetPrivateProfileString("Settings", "GuildItemPermission", 0, szGuildItemPermission, MAX_STRING, szLootINI) == 0)
+	{
+		sprintf_s(szGuildItemPermission, "View Only");
+		WritePrivateProfileString("Settings", "GuildItemPermission", szGuildItemPermission, szLootINI);
+	}
 	const auto report_function = [](const char* message) {WriteChatf(PLUGIN_MSG ":: %s", message); };
 	read_loot_patterns(szLootINI, report_function);
 
@@ -2976,6 +3865,7 @@ void SetAutoLootVariables()
 		WriteChatf(PLUGIN_MSG ":: Your default for new no drop items is: \ag%s\ax", szNoDropDefault);
 		WriteChatf(PLUGIN_MSG ":: Will exclude \ar%s\ax when checking for free slots", szExcludedBag1);
 		WriteChatf(PLUGIN_MSG ":: Will exclude \ar%s\ax when checking for free slots", szExcludedBag2);
+		WriteChatf(PLUGIN_MSG ":: Your default permission for items put into your guild bank is: \ag%s\ax", szGuildItemPermission);
 		list_loot_patterns(report_function);
 		WriteChatf(PLUGIN_MSG ":: The location for your loot ini is:\n \ag%s\ax", szLootINI);
 	}
@@ -3281,6 +4171,32 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		WritePrivateProfileString("Settings", "NoDropDefault", szNoDropDefault, szLootINI);
 		WriteChatf(PLUGIN_MSG ":: Your default for new no drop items is: \ag%s\ax", szNoDropDefault);
 	}
+	else if (!_stricmp(Parm1, "guilditempermission"))
+	{
+		// GBANK_PermissionCombo [0] = View Only
+		// GBANK_PermissionCombo [1] = Single Member -> Don't do this one, as it throws up a pop up
+		// GBANK_PermissionCombo [2] = Public If Usable	
+		// GBANK_PermissionCombo [3] = Public
+		if (!_stricmp(Parm2, "view only"))
+		{
+			sprintf_s(szGuildItemPermission, "View Only");
+		}
+		else if (!_stricmp(Parm2, "public if usable"))
+		{
+			sprintf_s(szGuildItemPermission, "Public if Usable");
+		}
+		else if (!_stricmp(Parm2, "public"))
+		{
+			sprintf_s(szGuildItemPermission, "Public");
+		}
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: \ar%s\ax is an invalid entry, please use [view only|public if usable|public]", szGuildItemPermission);
+			return;
+		}
+		WritePrivateProfileString("Settings", "GuildItemPermission", szGuildItemPermission, szLootINI);
+		WriteChatf(PLUGIN_MSG ":: Your default permission for items put into your guild bank is: \ag%s\ax", szGuildItemPermission);
+	}
 	else if (!_stricmp(Parm1, "excludedbag1"))
 	{
 		WritePrivateProfileString("Settings", "ExcludeBag1", Parm2, szLootINI);
@@ -3322,19 +4238,54 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	}
 	else if (!_stricmp(Parm1, "deposit"))
 	{
-		if (StartLootStuff)  // sent the command a second time while still active, assuming you wanted to bail out on the action
+		if (PSPAWNINFO psTarget = (PSPAWNINFO)pTarget)
 		{
-			StartLootStuff = false;
-			return;
+			if (psTarget->mActorClient.Class == PERSONALBANKER_CLASS)
+			{
+				if (!bEndThreads)
+				{
+					bEndThreads = true;
+					return;
+				}
+				StartLootStuff = false;
+				DWORD nThreadID = 0;
+				CreateThread(NULL, NULL, DepositPersonalBanker, (PVOID)0, 0, &nThreadID);
+				/*
+				if (StartLootStuff)  // sent the command a second time while still active, assuming you wanted to bail out on the action
+				{
+					StartLootStuff = false;
+					return;
+				}
+				StartLootStuff = true;
+				StartMoveToTarget = true;
+				StartToOpenWindow = true;
+				LootStuffWindowOpen = false;
+				LootStuffN = 1;
+				LootStuffTimer = pluginclock::now();
+				LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000);
+				sprintf_s(szLootStuffAction, "Deposit");
+				*/
+			}
+			else if (psTarget->mActorClient.Class == GUILDBANKER_CLASS)
+			{
+				if (!bEndThreads)
+				{
+					bEndThreads = true;
+					return;
+				}
+				StartLootStuff = false;
+				DWORD nThreadID = 0;
+				CreateThread(NULL, NULL, DepositGuildBanker, (PVOID)0, 0, &nThreadID);
+			}
+			else
+			{
+				WriteChatf(PLUGIN_MSG ":: Please target a guild/personal banker!");
+			}
 		}
-		StartLootStuff = true;
-		StartMoveToTarget = true;
-		StartToOpenWindow = true;
-		LootStuffWindowOpen = false;
-		LootStuffN = 1;
-		LootStuffTimer = pluginclock::now();
-		LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000);
-		sprintf_s(szLootStuffAction, "Deposit");
+		else
+		{
+			WriteChatf(PLUGIN_MSG ":: Please target a guild/personal banker!");
+		}
 	}
 	else if (!_stricmp(Parm1, "barter"))
 	{
@@ -3355,6 +4306,11 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	}
 	else if (!_stricmp(Parm1, "buy"))
 	{
+		if (!bEndThreads)
+		{
+			bEndThreads = true;
+			return;
+		}
 		CHAR	szTemp1[MAX_STRING] = { 0 };
 		sprintf_s(szTemp1, "%s|%s", Parm2, Parm3);
 		if (IsNumber(Parm3))
@@ -3390,6 +4346,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		WriteChatColor("/AutoLoot reload -> AutoLoot will reload variables from MQ2AutoLoot.ini");
 		WriteChatColor("/AutoLoot turn [on|off] -> Toggle autoloot");
 		WriteChatColor("/AutoLoot spamloot [on|off] -> Toggle loot action messages");
+		WriteChatColor("/AutoLoot logloot [on|off] -> Toggle logging of loot actions for the master looter");
 		WriteChatColor("/AutoLoot saveslots #n -> Stops looting when #n slots are left");
 		WriteChatColor("/AutoLoot distributedelay #n -> Master looter waits #n seconds to try and distribute the loot");
 		WriteChatColor("/AutoLoot cursordelay #n -> You will wait #n seconds before trying to autoinventory items on your cursor");
@@ -3403,6 +4360,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		WriteChatColor("/AutoLoot deposit -> If you have your personal banker targetted it will put all items marked Keep into your bank");
 		WriteChatColor("/AutoLoot deposit -> If you have your guild banker targetted it will put all items marked Deposit into your guild bank");
 		WriteChatColor("/AutoLoot buy \"Item Name\" #n -> Will buy #n of \"Item Name\" from the merchant");
+		WriteChatColor("/AutoLoot guilditempermission \"[view only|public if usable|public]\" -> Change your default permission for items put into your guild bank");
 		WriteChatColor("/AutoLoot status -> Shows the settings for MQ2AutoLoot.");
 		WriteChatColor("/AutoLoot sort -> Sort the Loot.ini file.");
 		WriteChatColor("/AutoLoot help");
@@ -3419,6 +4377,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		WriteChatf(PLUGIN_MSG ":: Your default for new no drop items is: \ag%s\ax", szNoDropDefault);
 		WriteChatf(PLUGIN_MSG ":: Will exclude \ar%s\ax when checking for free slots", szExcludedBag1);
 		WriteChatf(PLUGIN_MSG ":: Will exclude \ar%s\ax when checking for free slots", szExcludedBag2);
+		WriteChatf(PLUGIN_MSG ":: Your default permission for items put into your guild bank is: \ag%s\ax", szGuildItemPermission);
 		WriteChatf(PLUGIN_MSG ":: The location for your loot ini is:\n \ag%s\ax", szLootINI);
 	}
 }
