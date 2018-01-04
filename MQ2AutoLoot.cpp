@@ -420,14 +420,14 @@ PLUGIN_API VOID OnPulse(VOID)
 	}
 
 	// When confirmation box for looting no drop items pops up this will allow it to be clicked
-	if (CXWnd *pWnd = (CXWnd *)FindMQ2Window("ConfirmationDialogBox"))
+	if (CSidlScreenWnd *pWnd = (CSidlScreenWnd *)FindMQ2Window("ConfirmationDialogBox"))
 	{
-		if (((PCSIDLWND)(pWnd))->dShow)
+		if (pWnd->dShow)
 		{
-			if (CXWnd *Child = pWnd->GetChildItem("CD_TextOutput"))
+			if (CStmlWnd *Child = (CStmlWnd*)pWnd->GetChildItem("CD_TextOutput"))
 			{
 				char ConfirmationText[MAX_STRING];
-				GetCXStr(((PCSIDLWND)Child)->SidlText, ConfirmationText, sizeof(ConfirmationText));
+				GetCXStr(Child->STMLText, ConfirmationText, sizeof(ConfirmationText));
 				if (strstr(ConfirmationText, "is a NO DROP item, are you sure you wish to loot it?"))
 				{
 					if (WinState((CXWnd*)pLootWnd))
