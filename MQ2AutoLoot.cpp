@@ -169,7 +169,7 @@ public:
 				Dest.Type = pBoolType;
 				return true;
 			case DepositActive:
-				Dest.DWord = (StartLootStuff && !_stricmp(szLootStuffAction, "Deposit"));
+				Dest.DWord = bDepositActive;
 				Dest.Type = pBoolType;
 				return true;
 			case BarterActive:
@@ -1082,24 +1082,6 @@ PLUGIN_API VOID OnPulse(VOID)
 	}
 }
 
-// This is called when we receive the EQ_BEGIN_ZONE packet is received
-PLUGIN_API VOID BeginZone(VOID)
-{
-	DebugSpewAlways("MQ2AutoLoot::BeginZone");
-}
-
-// This is called when we receive the EQ_END_ZONE packet is received
-PLUGIN_API VOID EndZone(VOID)
-{
-	DebugSpewAlways("MQ2AutoLoot::EndZone");
-}
-// This is called when pChar!=pCharOld && We are NOT zoning
-// honestly I have no idea if its better to use this one or EndZone (above)
-PLUGIN_API VOID Zoned(VOID)
-{
-	DebugSpewAlways("MQ2AutoLoot::Zoned");
-}
-
 PMQPLUGIN Plugin(char* PluginName)
 {
 	long Length = strlen(PluginName) + 1;
@@ -1380,239 +1362,9 @@ bool FitInInventory(DWORD pdItemSize)
 
 int CheckIfItemIsLoreByID(int ItemID)
 {
-	LONG nPack = 0;
-	DWORD nAug = 0;
-	PCHARINFO pCharInfo = GetCharInfo();
-	PCHARINFO2 pChar2 = GetCharInfo2();
-	//check my inventory slots
-	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray)
-	{
-		for (unsigned long nSlot = 0; nSlot < NUM_INV_SLOTS; nSlot++)
-		{
-			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
-			{
-				if (ItemID == GetItemFromContents(pItem)->ItemNumber)
-				{
-					return pItem->Item2->Lore;
-				}
-				else // for augs
-				{
-					if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
-					{
-						for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
-						{
-							if (pItem->Contents.ContainedItems.pItems->Item[nAug])
-							{
-								if (PITEMINFO pAugItem = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
-								{
-									if (pAugItem->Type == ITEMTYPE_NORMAL && pAugItem->AugType && ItemID == pAugItem->ItemNumber)
-									{
-										return pAugItem->Lore;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	//check cursor
-	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
-	{
-		if (PCONTENTS pItem = pChar2->pInventoryArray->Inventory.Cursor)
-		{
-			if (ItemID == GetItemFromContents(pItem)->ItemNumber)
-			{
-				return pItem->Item2->Lore;
-			}
-			else // for augs
-			{
-				if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
-				{
-					for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
-					{
-						if (pItem->Contents.ContainedItems.pItems->Item[nAug])
-						{
-							if (PITEMINFO pAugItem = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
-							{
-								if (pAugItem->Type == ITEMTYPE_NORMAL && pAugItem->AugType && ItemID == pAugItem->ItemNumber)
-								{
-									return pAugItem->Lore;
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	//check in my bags
-	if (pChar2 && pChar2->pInventoryArray) 
-	{
-		for (unsigned long nPack = 0; nPack < 10; nPack++)
-		{
-			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
-			{
-				if (GetItemFromContents(pPack)->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
-				{
-					for (unsigned long nItem = 0; nItem < GetItemFromContents(pPack)->Slots; nItem++)
-					{
-						if (PCONTENTS pItem = pPack->GetContent(nItem))
-						{
-							if (ItemID == GetItemFromContents(pItem)->ItemNumber)
-							{
-								return pItem->Item2->Lore;
-							}
-							else // for augs
-							{
-								if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
-								{
-									for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
-									{
-										if (pItem->Contents.ContainedItems.pItems->Item[nAug])
-										{
-											if (PITEMINFO pAugItem = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
-											{
-												if (pAugItem->Type == ITEMTYPE_NORMAL && pAugItem->AugType && ItemID == pAugItem->ItemNumber)
-												{
-													return pAugItem->Lore;
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	//checking bank slots
-	if (pCharInfo->pBankArray)
-	{
-		for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
-		{
-			if (PCONTENTS pItem = pCharInfo->pBankArray->Bank[nPack])
-			{
-				if (ItemID == GetItemFromContents(pItem)->ItemNumber)
-				{
-					return pItem->Item2->Lore;
-				}
-				else // for augs
-				{
-					if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
-					{
-						for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
-						{
-							if (pItem->Contents.ContainedItems.pItems->Item[nAug])
-							{
-								if (PITEMINFO pAugItem = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
-								{
-									if (pAugItem->Type == ITEMTYPE_NORMAL && pAugItem->AugType && ItemID == pAugItem->ItemNumber)
-									{
-										return pAugItem->Lore;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	//checking inside bank bags
-	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++) //checking bank slots
-	{
-		if (pCharInfo->pBankArray)
-		{
-			if (PCONTENTS pPack = pCharInfo->pBankArray->Bank[nPack])
-			{
-				if (PITEMINFO theitem = GetItemFromContents(pPack))
-				{
-					if (theitem->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems) //checking bank bags
-					{
-						for (unsigned long nItem = 0; nItem < theitem->Slots; nItem++)
-						{
-							if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
-							{
-								if (ItemID == GetItemFromContents(pItem)->ItemNumber)
-								{
-									return pItem->Item2->Lore;
-								}
-								else // for augs
-								{
-									if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
-									{
-										for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
-										{
-											if (pItem->Contents.ContainedItems.pItems->Item[nAug])
-											{
-												if (PITEMINFO pAugItem = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
-												{
-													if (pAugItem->Type == ITEMTYPE_NORMAL && pAugItem->AugType && ItemID == pAugItem->ItemNumber)
-													{
-														return pAugItem->Lore;
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-#ifndef EMU
-	PCHARINFO pChar = GetCharInfo();
-	if (pChar && pChar->pMountsArray && pChar->pMountsArray->Mounts)
-	{
-		for (unsigned long nSlot = 0; nSlot < MAX_KEYRINGITEMS; nSlot++)
-		{
-			if (PCONTENTS pItem = pChar->pMountsArray->Mounts[nSlot])
-			{
-				if (ItemID == GetItemFromContents(pItem)->ItemNumber)
-				{
-					return pItem->Item2->Lore;
-				}
-			}
-		}
-	}
-	if (pChar && pChar->pIllusionsArray && pChar->pIllusionsArray->Illusions)
-	{
-		for (unsigned long nSlot = 0; nSlot < MAX_KEYRINGITEMS; nSlot++)
-		{
-			if (PCONTENTS pItem = pChar->pIllusionsArray->Illusions[nSlot])
-			{
-				if (ItemID == GetItemFromContents(pItem)->ItemNumber)
-				{
-					return pItem->Item2->Lore;
-				}
-			}
-		}
-	}
-	if (pChar && pChar->pFamiliarArray && pChar->pFamiliarArray->Familiars)
-	{
-		for (unsigned long nSlot = 0; nSlot < MAX_KEYRINGITEMS; nSlot++)
-		{
-			if (PCONTENTS pItem = pChar->pFamiliarArray->Familiars[nSlot])
-			{
-				if (ItemID == GetItemFromContents(pItem)->ItemNumber)
-				{
-					return pItem->Item2->Lore;
-				}
-			}
-		}
-	}
-#endif
-
+	if (PCONTENTS pItem = FindItemByID(ItemID)) return GetItemFromContents(FindItemByID(ItemID))->Lore;
+	if (PCONTENTS pItem = FindBankItemByID(ItemID)) return GetItemFromContents(FindBankItemByID(ItemID))->Lore;
 	return 0;
-
 }
 
 DWORD FindItemCount(CHAR* pszItemName)
@@ -2277,7 +2029,6 @@ bool CheckGuildBank(PITEMINFO pItem)
 					CHAR *pParsedValue = strtok_s(szDepositCountText, ":", &pParsedToken);
 					pParsedValue = strtok_s(NULL, ":", &pParsedToken);
 					DWORD SlotsLeft = atoi(pParsedValue);
-					WriteChatf(PLUGIN_MSG ":: The number of items left that can be deposited is: %d", SlotsLeft);
 					bool bLoreItem = false;
 					if (pItem->Lore != 0)
 					{
@@ -2360,7 +2111,6 @@ bool CheckGuildBank(PITEMINFO pItem)
 
 bool DepositItems(PITEMINFO pItem)  //This should only be run from inside threads
 {
-	WriteChatf(PLUGIN_MSG ":: DepositItems");
 	if (!InGameOK() || bEndThreads)  // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
 	{
 		bEndThreads = true;
@@ -2500,14 +2250,12 @@ bool PutInGuildBank(PITEMINFO pItem)
 								CHAR *pParsedValue = strtok_s(szBankCountText, ":", &pParsedToken);
 								pParsedValue = strtok_s(NULL, ":", &pParsedToken);
 								DWORD SlotsLeft = atoi(pParsedValue);
-								WriteChatf(PLUGIN_MSG ":: The number of items left that can be promoted is: %d", SlotsLeft);
 								if (SlotsLeft > 0)
 								{
 									if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_PromoteButton"))
 									{
 										if (pWndButton->Enabled)
 										{
-											WriteChatf(PLUGIN_MSG ":: Promiting shit");
 											SendWndClick2(pWndButton, "leftmouseup");
 											Sleep(2000); // TODO figure out what to wait for so I don't have to hardcode this long of a delay
 											return true;
@@ -2619,7 +2367,7 @@ void SetItemPermissions(PITEMINFO pItem)
 											if (!_stricmp(szGuildItemPermission, "View Only")) SendComboSelect("GuildBankWnd", "GBANK_PermissionCombo", 0);
 											if (!_stricmp(szGuildItemPermission, "Public If Usable")) SendComboSelect("GuildBankWnd", "GBANK_PermissionCombo", 2);
 											if (!_stricmp(szGuildItemPermission, "Public")) SendComboSelect("GuildBankWnd", "GBANK_PermissionCombo", 3);
-											WriteChatf(PLUGIN_MSG ":: Promiting shit");
+											Sleep(100); // TODO figure out a more elegant way of doing this
 											SendWndClick2(pWndButton, "leftmouseup");
 											Sleep(2000); // TODO figure out a more elegant way of doing this
 											return;
@@ -3563,7 +3311,6 @@ void DoLootStuff(CHAR* szAction)
 										CHAR *pParsedValue = strtok_s(szDepositCountText, ":", &pParsedToken);
 										pParsedValue = strtok_s(NULL, ":", &pParsedToken);
 										DWORD SlotsLeft = atoi(pParsedValue);
-										WriteChatf(PLUGIN_MSG ":: The number of items left that can be deposited is: %d", SlotsLeft);
 										if (SlotsLeft > 0)
 										{
 											sprintf_s(szCommand, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
@@ -3672,7 +3419,6 @@ void DoLootStuff(CHAR* szAction)
 														CHAR *pParsedValue = strtok_s(szDepositCountText, ":", &pParsedToken);
 														pParsedValue = strtok_s(NULL, ":", &pParsedToken);
 														DWORD SlotsLeft = atoi(pParsedValue);
-														WriteChatf(PLUGIN_MSG ":: The number of items left that can be deposited is: %d", SlotsLeft);
 														if (SlotsLeft > 0)
 														{
 															sprintf_s(szCommand, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name);
@@ -4248,23 +3994,9 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 					return;
 				}
 				StartLootStuff = false;
+				bDepositActive = true;
 				DWORD nThreadID = 0;
 				CreateThread(NULL, NULL, DepositPersonalBanker, (PVOID)0, 0, &nThreadID);
-				/*
-				if (StartLootStuff)  // sent the command a second time while still active, assuming you wanted to bail out on the action
-				{
-					StartLootStuff = false;
-					return;
-				}
-				StartLootStuff = true;
-				StartMoveToTarget = true;
-				StartToOpenWindow = true;
-				LootStuffWindowOpen = false;
-				LootStuffN = 1;
-				LootStuffTimer = pluginclock::now();
-				LootStuffCancelTimer = pluginclock::now() + std::chrono::milliseconds(30000);
-				sprintf_s(szLootStuffAction, "Deposit");
-				*/
 			}
 			else if (psTarget->mActorClient.Class == GUILDBANKER_CLASS)
 			{
@@ -4274,6 +4006,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 					return;
 				}
 				StartLootStuff = false;
+				bDepositActive = true;
 				DWORD nThreadID = 0;
 				CreateThread(NULL, NULL, DepositGuildBanker, (PVOID)0, 0, &nThreadID);
 			}
