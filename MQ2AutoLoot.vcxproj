@@ -13,7 +13,7 @@
   <PropertyGroup Label="Globals">
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{564C515B-5EA9-4060-B442-53AD6C43A770}</ProjectGuid>
-    <WindowsTargetPlatformVersion>8.1</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
@@ -41,23 +41,24 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <OutDir>..\Release\</OutDir>
+    <IntDir>.\Intermediate\</IntDir>
   </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" />
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <ClCompile />
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <ClCompile />
-  </ItemDefinitionGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <OutDir>..\Release\</OutDir>
+    <IntDir>.\Intermediate\</IntDir>
+  </PropertyGroup>
   <ItemGroup>
-    <ClCompile Include="LootPatterns.cpp" />
     <ClCompile Include="..\MQ2AutoLootSort\LootSort.cpp" />
+    <ClCompile Include="ItemActions.cpp" />
+    <ClCompile Include="LootPatterns.cpp" />
     <ClCompile Include="MQ2AutoLoot.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\MQ2AutoLootSort\LootSort.h" />
     <ClInclude Include="..\MQ2Plugin.h" />
+    <ClInclude Include="ItemActions.h" />
     <ClInclude Include="LootPatterns.h" />
+    <ClInclude Include="MQ2AutoLoot.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
