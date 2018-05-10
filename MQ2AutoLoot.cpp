@@ -271,8 +271,7 @@ bool DestroyStuff(void)
 			{
 				if (pItem->ID == DestroyID)
 				{
-					sprintf_s(szCommand, "/nomodkey /itemnotify \"%s\" leftmouseup", pItem->Item2->Name);
-					DoCommand(GetCharInfo()->pSpawn, szCommand);
+					PickupItem(eItemContainerPossessions, pItem);
 					LootTimer = pluginclock::now() + std::chrono::milliseconds(100);
 					return true;
 				}
@@ -295,8 +294,7 @@ bool DestroyStuff(void)
 							{
 								if (pItem->ID == DestroyID)
 								{
-									sprintf_s(szCommand, "/nomodkey /itemnotify \"%s\" leftmouseup", pItem->Item2->Name);
-									DoCommand(GetCharInfo()->pSpawn, szCommand);
+					                PickupItem(eItemContainerPossessions, pItem);
 									LootTimer = pluginclock::now() + std::chrono::milliseconds(100);
 									return true;
 								}
