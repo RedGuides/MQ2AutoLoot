@@ -156,63 +156,97 @@ bool OpenWindow(PSPAWNINFO pSpawn)
 	}
 }
 
-void SellItem(PITEMINFO theitem)
+bool WaitForItemToBeSelected(PCONTENTS pItem, short InvSlot, short BagSlot)
 {
-	sprintf_s(szCommand, "/nomodkey /itemnotify \"%s\" leftmouseup", theitem->Name); // Lets select the item to sell
-	DoCommand(GetCharInfo()->pSpawn, szCommand);
 	pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(30);
-	while (pluginclock::now() < WhileTimer) // Will wait up to 30 seconds or until I get have the item selected
+	while (pluginclock::now() < WhileTimer) // Will wait up to 30 seconds or until I get the merchant buys the item
 	{
-		if (!InGameOK() || bEndThreads) { return; }
-		if (WinState((CXWnd*)pMerchantWnd))
+		Sleep(750);  // Lets see if 750 ms is sufficient of a delay, TODO figure out a smarter way to determine when a merchant is ready to buy an item
+		if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
 		{
-			if (CXWnd *pLabelWnd = pMerchantWnd->GetChildItem("MW_SelectedItemLabel"))
-			{
-				CHAR WindowText[MAX_STRING] = { 0 };
-				GetCXStr(pLabelWnd->WindowText, WindowText, MAX_STRING);
-				if (!_stricmp(theitem->Name, WindowText)) { WhileTimer = pluginclock::now(); } // Ok the item is selected in your merchant window
-			}
+			return false;
 		}
-		Sleep(200);  // If I used 100 ms, sometimes the merchant would be to "busy" buy
-	}
-	if (!InGameOK() || bEndThreads) { return; }
-	if (WinState((CXWnd*)pMerchantWnd))
-	{
-		if (CXWnd *pLabelWnd = pMerchantWnd->GetChildItem("MW_SelectedItemLabel"))
+		if (!CheckIfItemIsInSlot(InvSlot, BagSlot)) // There is no item in 
 		{
-			CHAR WindowText[MAX_STRING] = { 0 };
-			GetCXStr(pLabelWnd->WindowText, WindowText, MAX_STRING);
-			if (_stricmp(WindowText,theitem->Name)) { return; } // Oh shit somehow we got the wrong item targetted
+			return false;
 		}
-	}
-	if (CXWnd *pWndButton = pMerchantWnd->GetChildItem("MW_Sell_Button"))
-	{
-		if (pWndButton->Enabled)
+		if (CMerchantWnd * pMerchWnd = (CMerchantWnd *)((PEQMERCHWINDOW)pMerchantWnd))
 		{
-			bool Old = ((PCXWNDMGR)pWndMgr)->KeyboardFlags[0];
-			((PCXWNDMGR)pWndMgr)->KeyboardFlags[0] = 1;
-			gShiftKeyDown = 1;
-			SendWndClick2(pWndButton, "leftmouseup");
-			gShiftKeyDown = 0;
-			((PCXWNDMGR)pWndMgr)->KeyboardFlags[0] = Old;
-			WhileTimer = pluginclock::now() + std::chrono::seconds(30);
-			while (pluginclock::now() < WhileTimer) // Will wait up to 30 seconds or until I get the merchant buys the item
+			if (PCONTENTS pSelectedItem = pMerchWnd->pSelectedItem.pObject)
 			{
-				if (!InGameOK() || bEndThreads) { return; }
-				if (WinState((CXWnd*)pMerchantWnd))
-				{
-					if (CXWnd *pLabelWnd = pMerchantWnd->GetChildItem("MW_SelectedItemLabel"))
-					{
-						CHAR WindowText[MAX_STRING] = { 0 };
-						GetCXStr(pLabelWnd->WindowText, WindowText, MAX_STRING);
-						if (!_stricmp(WindowText, "\0")) { WhileTimer = pluginclock::now(); }  // Ok no item is selected in your merchant window
+				if (pSelectedItem->GlobalIndex.Index.Slot1 == pItem->GlobalIndex.Index.Slot1)
+				{ // This is true immediately when we first enter this function... 
+					if (pSelectedItem->GlobalIndex.Index.Slot2 == pItem->GlobalIndex.Index.Slot2)
+					{ // we need some delay otherwise it doesn't sell and we get the message "I am not interested in buying that."
+						return true; //adding this check incase someone clicks on a different item 
 					}
 				}
-				Sleep(200);  // If I used 100 ms, sometimes the merchant would be to "busy" buy
+			}
+
+		}
+	}
+	return false;
+}
+
+bool CheckIfItemIsInSlot(short InvSlot, short BagSlot)
+{
+	if (PCONTENTS pTempItem = FindItemBySlot(InvSlot, BagSlot, eItemContainerPossessions))
+	{
+		return true; // shit still there
+	}
+	else
+	{
+		return false; // the item is gone
+	}
+}
+
+void SellItem(PCONTENTS pItem)
+{
+	PCHARINFO pChar = GetCharInfo();
+	CHAR szCount[MAX_STRING];
+	short InvSlot = pItem->GlobalIndex.Index.Slot1;
+	short BagSlot = pItem->GlobalIndex.Index.Slot2;
+	if (PITEMINFO theitem = GetItemFromContents(pItem))
+	{
+		if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
+		{
+			sprintf_s(szCount, "1");
+		}
+		else
+		{
+			sprintf_s(szCount, "%d", pItem->StackCount);
+		}
+		if (PickupItem(eItemContainerPossessions, pItem))
+		{
+			pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(30);
+			while (pluginclock::now() < WhileTimer) // Will wait up to 30 seconds or until I get the merchant buys the item
+			{
+				if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
+				{
+					return;
+				}
+				if (WaitForItemToBeSelected(pItem, InvSlot, BagSlot))
+				{
+					if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
+					{
+						return;
+					}
+					if (!CheckIfItemIsInSlot(InvSlot, BagSlot))
+					{
+						return;
+					}
+					else
+					{
+						SellItem(pChar->pSpawn, szCount);
+					}
+				}
+				else
+				{
+					return;
+				}
 			}
 		}
 	}
-	return;
 }
 
 bool FitInPersonalBank(PITEMINFO pItem)
@@ -1055,7 +1089,7 @@ DWORD __stdcall SellItems(PVOID pData)
 								if (theitem->NoDrop &&  theitem->Cost > 0)
 								{
 									WriteChatf(PLUGIN_MSG ":: Attempting to sell \ag%s\ax.", theitem->Name);
-									SellItem(theitem);
+									SellItem(pItem);
 								}
 								else if (!theitem->NoDrop)
 								{
@@ -1106,7 +1140,7 @@ DWORD __stdcall SellItems(PVOID pData)
 												if (theitem->NoDrop &&  theitem->Cost > 0)
 												{
 													WriteChatf(PLUGIN_MSG ":: Attempting to sell \ag%s\ax.", theitem->Name);
-													SellItem(theitem);
+													SellItem(pItem);
 												}
 												else if (!theitem->NoDrop)
 												{
