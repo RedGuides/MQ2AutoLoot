@@ -21,7 +21,10 @@ extern pluginclock::time_point		LootThreadTimer;
 bool MoveToNPC(PSPAWNINFO pSpawn);
 bool HandleMoveUtils(void);  // Used to connect to MQ2MoveUtils
 bool OpenWindow(PSPAWNINFO pSpawn);
-void SellItem(PITEMINFO theitem);
+bool CheckIfItemIsInSlot(short InvSlot, short BagSlot);
+bool WaitForItemToBeSelected(PCONTENTS pItem, short InvSlot, short BagSlot);
+bool WaitForItemToBeSold(short InvSlot, short BagSlot);
+void SellItem(PCONTENTS pItem);
 bool FitInPersonalBank(PITEMINFO pItem);
 void PutInPersonalBank(PITEMINFO pItem);
 bool CheckGuildBank(PITEMINFO pItem);
