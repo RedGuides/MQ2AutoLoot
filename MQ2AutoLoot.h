@@ -1,5 +1,5 @@
 #define	PLUGIN_MSG			"\ag[MQ2AutoLoot]\ax "  
-
+#if !defined(EMU)
 #include <chrono>
 
 using namespace std;
@@ -53,3 +53,4 @@ void SetItemCommand(PSPAWNINFO pCHAR, PCHAR szLine);
 void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem);
 int dataAutoLoot(char* szName, MQ2TYPEVAR &Ret);
 int AutoLootFreeInventory(void); // used to calculate TLO ${AutoLoot.FreeInventory}
+#endif

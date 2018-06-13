@@ -17,7 +17,7 @@
 PreSetup(PLUGIN_NAME);
 PLUGIN_VERSION(VERSION);
 #endif PLUGIN_API
-
+#if !defined(EMU)
 #include "../MQ2AutoLootSort/LootSort.h"
 #include "LootPatterns.h"
 #include "MQ2AutoLoot.h"
@@ -2446,4 +2446,4 @@ PLUGIN_API VOID OnPulse(VOID)
 	if (HandlePersonalLoot(ItemOnCursor, pChar, pAdvLoot, pPersonalList, pSharedList)) { return; }
 	if (HandleSharedLoot(ItemOnCursor, pChar, pChar2, pAdvLoot, pPersonalList, pSharedList)) { return; }
 }
-
+#endif

@@ -1,4 +1,5 @@
 #include "../MQ2Plugin.h"
+#if !defined(EMU)
 #include "MQ2AutoLoot.h"
 #include "ItemActions.h"
 #include <chrono>
@@ -1795,3 +1796,4 @@ DWORD __stdcall BarterItems(PVOID pData)
 	bEndThreads = true;
 	return 0;
 }
+#endif
