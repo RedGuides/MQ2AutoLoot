@@ -578,7 +578,7 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 		if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
 		{
 			int ml = 0;
-			for (int ml = 0; ml < 72; ml++)
+			for (ml = 0; ml < 72; ml++)
 			{
 				if (pRaid->RaidMemberUsed[ml] && pRaid->RaidMember[ml].MasterLooter)
 				{
