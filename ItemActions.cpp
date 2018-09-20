@@ -1,9 +1,8 @@
 #include "../MQ2Plugin.h"
-#if !defined(EMU)
+#if !defined(ROF2EMU) && !defined(UFEMU)
 #include "MQ2AutoLoot.h"
 #include "ItemActions.h"
 #include <chrono>
-
 
 using namespace std;
 typedef std::chrono::high_resolution_clock pluginclock;

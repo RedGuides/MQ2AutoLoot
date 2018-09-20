@@ -17,7 +17,7 @@
 PreSetup(PLUGIN_NAME);
 PLUGIN_VERSION(VERSION);
 #endif PLUGIN_API
-#if !defined(ROF2EMU) && !defined(UFEMU)
+#if !defined(EMU)
 #include "../MQ2AutoLootSort/LootSort.h"
 #include "LootPatterns.h"
 #include "MQ2AutoLoot.h"
