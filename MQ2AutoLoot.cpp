@@ -477,7 +477,7 @@ bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PEQADVLOOTWND pAdvLo
 						CHAR *pParsedValue = strtok_s(action, "|", &pParsedToken);
 						if (!_stricmp(pParsedValue, "Keep") || !_stricmp(pParsedValue, "Sell") || !_stricmp(pParsedValue, "Deposit") || !_stricmp(pParsedValue, "Barter") || !_stricmp(pParsedValue, "Quest") || !_stricmp(pParsedValue, "Gear") || !_stricmp(action, "Destroy"))
 						{
-							if (pPersonalItem->LootDetails->Locked || CheckIfItemIsLoreByID(pPersonalItem->ItemID) || !DoIHaveSpace(pPersonalItem->Name, pPersonalItem->MaxStack, pPersonalItem->LootDetails->StackCount))
+							if (pPersonalItem->LootDetails.m_array[0].Locked || CheckIfItemIsLoreByID(pPersonalItem->ItemID) || !DoIHaveSpace(pPersonalItem->Name, pPersonalItem->MaxStack, pPersonalItem->LootDetails.m_array[0].StackCount))
 							{
 								if (iSpamLootInfo) { WriteChatf("%s:: PList: \ag%s\ax is lore/locked/I don't have room, setting to leave", PLUGIN_MSG, pPersonalItem->Name); }
 								if (iLogLoot)
@@ -708,11 +708,11 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 											QuestNumber = atoi(pParsedValue);
 										}
 									}
-									if ((ItemOnCursor || pShareItem->LootDetails->Locked || QuestNumber <= FindItemCount(pShareItem->Name) || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails->StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && !MasterLooter)
+									if ((ItemOnCursor || pShareItem->LootDetails.m_array[0].Locked || QuestNumber <= FindItemCount(pShareItem->Name) || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails.m_array[0].StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && !MasterLooter)
 									{
 										IDoNotWant = true;
 									}
-									else if ((ItemOnCursor || pShareItem->LootDetails->Locked || QuestNumber <= FindItemCount(pShareItem->Name) || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails->StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && MasterLooter)
+									else if ((ItemOnCursor || pShareItem->LootDetails.m_array[0].Locked || QuestNumber <= FindItemCount(pShareItem->Name) || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails.m_array[0].StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && MasterLooter)
 									{
 										CheckIfOthersWant = true;
 									}
@@ -771,11 +771,11 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 										}
 										pParsedValue = strtok_s(NULL, "|", &pParsedToken);
 									}
-									if ((!RightClass || ItemOnCursor || pShareItem->LootDetails->Locked || GearNumber <= FindItemCount(pShareItem->Name) || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails->StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && !MasterLooter)
+									if ((!RightClass || ItemOnCursor || pShareItem->LootDetails.m_array[0].Locked || GearNumber <= FindItemCount(pShareItem->Name) || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails.m_array[0].StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && !MasterLooter)
 									{
 										IDoNotWant = true;
 									}
-									else if ((!RightClass || ItemOnCursor || pShareItem->LootDetails->Locked || GearNumber <= FindItemCount(pShareItem->Name) || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails->StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && MasterLooter)
+									else if ((!RightClass || ItemOnCursor || pShareItem->LootDetails.m_array[0].Locked || GearNumber <= FindItemCount(pShareItem->Name) || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails.m_array[0].StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && MasterLooter)
 									{
 										CheckIfOthersWant = true;
 									}
@@ -786,11 +786,11 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 								}
 								else if (!_stricmp(pParsedValue, "Keep") || !_stricmp(pParsedValue, "Deposit") || !_stricmp(pParsedValue, "Sell") || !_stricmp(pParsedValue, "Barter"))
 								{
-									if ((ItemOnCursor || pShareItem->LootDetails->Locked || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails->StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && !MasterLooter)
+									if ((ItemOnCursor || pShareItem->LootDetails.m_array[0].Locked || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails.m_array[0].StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && !MasterLooter)
 									{
 										IDoNotWant = true;
 									}
-									else if ((ItemOnCursor || pShareItem->LootDetails->Locked || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails->StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && MasterLooter)
+									else if ((ItemOnCursor || pShareItem->LootDetails.m_array[0].Locked || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails.m_array[0].StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && MasterLooter)
 									{
 										CheckIfOthersWant = true;
 									}
@@ -805,7 +805,7 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 									{
 										IDoNotWant = true;
 									}
-									else if ((ItemOnCursor || pShareItem->LootDetails->Locked || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails->StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && MasterLooter)
+									else if ((ItemOnCursor || pShareItem->LootDetails.m_array[0].Locked || !DoIHaveSpace(pShareItem->Name, pShareItem->MaxStack, pShareItem->LootDetails.m_array[0].StackCount) || CheckIfItemIsLoreByID(pShareItem->ItemID)) && MasterLooter)
 									{
 										IDoNotWant = true;
 									}
@@ -859,7 +859,7 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 										CreateLogEntry(szTemp);
 									}
 									LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-									pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 0, pShareItem->LootDetails->StackCount);
+									pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 0, pShareItem->LootDetails.m_array[0].StackCount);
 									return true;
 								}
 								else if (IWant && !MasterLooter)
@@ -880,7 +880,7 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 										CreateLogEntry(szTemp);
 									}
 									LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-									pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 1, pShareItem->LootDetails->StackCount);
+									pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 1, pShareItem->LootDetails.m_array[0].StackCount);
 									return true;
 								}
 								else if (IDoNotWant && !MasterLooter)
@@ -1469,7 +1469,7 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 				CreateLogEntry(szTemp);
 			}
 			LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-			pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 1, pShareItem->LootDetails->StackCount); // Leaving the item on the corpse
+			pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 1, pShareItem->LootDetails.m_array[0].StackCount); // Leaving the item on the corpse
 		}
 	}
 	LootTimer = pluginclock::now();
@@ -1511,7 +1511,7 @@ bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem)
 			{
 				bDistributeItemSucceeded = false;
 				bDistributeItemFailed = false;
-				pAdvancedLootWnd->DoSharedAdvLootAction(pShareItemNew, &CXStr(szName), 0, pShareItemNew->LootDetails->StackCount);
+				pAdvancedLootWnd->DoSharedAdvLootAction(pShareItemNew, &CXStr(szName), 0, pShareItemNew->LootDetails.m_array[0].StackCount);
 				pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
 				while (pluginclock::now() < WhileTimer) // While loop to wait till we are done with the previous looting command
 				{
