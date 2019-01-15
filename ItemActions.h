@@ -18,6 +18,7 @@ extern bool							bEndThreads; // Set to true when you want to end any threads o
 extern pluginclock::time_point		LootThreadTimer;
 
 // Functions necessary to deposit/sell/barter/etc items
+void ResetItemActions(void);
 bool MoveToNPC(PSPAWNINFO pSpawn);
 bool HandleMoveUtils(void);  // Used to connect to MQ2MoveUtils
 bool OpenWindow(PSPAWNINFO pSpawn);
