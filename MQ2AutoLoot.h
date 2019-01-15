@@ -9,6 +9,7 @@ typedef std::chrono::high_resolution_clock pluginclock;
 extern int				iUseAutoLoot;
 extern int				iSpamLootInfo;
 extern int				iCursorDelay;
+extern int				iNewItemDelay;
 extern int				iDistributeLootDelay;
 extern int				iSaveBagSlots;
 extern int				iQuestKeep;
