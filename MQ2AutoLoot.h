@@ -1,5 +1,5 @@
 #define	PLUGIN_MSG			"\ag[MQ2AutoLoot]\ax "  
-#if !defined(EMU)
+
 #include <chrono>
 
 using namespace std;
@@ -33,18 +33,19 @@ bool CheckCursor(void);  // Returns true if an item is on your cursor
 bool DestroyStuff(void); // Will find items you loot marked destroy and delete them
 bool CheckWindows(bool ItemOnCursor);  // Returns true if your attempting to accept trade requests or click the confirmation box for no drop items
 bool SetLootSettings(void); // Turn off Auto Loot All
-bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PEQADVLOOTWND pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList); // Handle items in your personal loot window
+bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQADVLOOTWND pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList); // Handle items in your personal loot window
 bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQADVLOOTWND pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList); // Handle items in your shared loot window
 bool WinState(CXWnd *Wnd);
 PMQPLUGIN Plugin(char* PluginName);
 bool HandleEQBC(void);  // Used to get EQBC Names
-bool DoIHaveSpace(CHAR* pszItemName, DWORD plMaxStackSize, DWORD pdStackSize);
+bool ParseLootEntry(bool ItemOnCursor, PCHARINFO2 pChar2, PLOOTITEM pLootItem, bool bMasterLooter, char* pszItemAction, bool* pbIWant, bool* pbCheckIfOthersWant); // Parse loot entry for an item and determine an appropriate action
+void InitialLootEntry(PLOOTITEM pLootItem); // Create the initial loot entry for a new item or one where we don't recognize the loot action as valid
+bool DoIHaveSpace(CHAR* pszItemName, DWORD plMaxStackSize, DWORD pdStackSize, bool bSaveBagSlots);
 bool FitInInventory(DWORD pdItemSize);
 int CheckIfItemIsLoreByID(int ItemID);
 DWORD FindItemCount(CHAR* pszItemName);
 DWORD __stdcall PassOutLoot(PVOID pData); // Pass out items to the group or the raid
 bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem);
-void DoBarterStuff(CHAR* szAction);
 bool DirectoryExists(LPCTSTR lpszPath);
 void CreateLogEntry(PCHAR szLogEntry);
 void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine);
@@ -53,4 +54,3 @@ void SetItemCommand(PSPAWNINFO pCHAR, PCHAR szLine);
 void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem);
 int dataAutoLoot(char* szName, MQ2TYPEVAR &Ret);
 int AutoLootFreeInventory(void); // used to calculate TLO ${AutoLoot.FreeInventory}
-#endif
