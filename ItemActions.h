@@ -15,6 +15,8 @@ extern bool							bBuyActive;
 extern bool							bBarterReset; // Set to true when you need to refresh your barter search
 extern bool							bBarterItemSold; // Set to true when you sell an item
 extern bool							bEndThreads; // Set to true when you want to end any threads out there, also it is used to enforce that at most a single thread is active at one time
+extern PCONTENTS					pItemToPickUp;
+extern CXWnd*						pWndLeftMouseUp;
 extern pluginclock::time_point		LootThreadTimer;
 
 // Functions necessary to deposit/sell/barter/etc items
