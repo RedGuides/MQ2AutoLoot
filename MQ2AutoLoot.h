@@ -1,4 +1,5 @@
-#define	PLUGIN_MSG			"\ag[MQ2AutoLoot]\ax "  
+#define	PLUGIN_CHAT_MSG		"\ag[MQ2AutoLoot]\ax "  
+#define	PLUGIN_DEBUG_MSG	"[MQ2AutoLoot] "  
 
 #include <chrono>
 
@@ -30,6 +31,8 @@ extern char				szLogFileName[MAX_STRING];
 bool InGameOK(void);
 void SetAutoLootVariables(void);
 void CreateLootINI(void);
+bool DoThreadAction(void); // Do actions from threads that need to be in the pulse to stop crashing to desktop
+void ShowInfo(void); // Outputs the variable settings into your MQ2 Window
 bool CheckCursor(void);  // Returns true if an item is on your cursor
 bool DestroyStuff(void); // Will find items you loot marked destroy and delete them
 bool CheckWindows(bool ItemOnCursor);  // Returns true if your attempting to accept trade requests or click the confirmation box for no drop items
