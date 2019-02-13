@@ -46,14 +46,11 @@ char					szGuildItemPermission[MAX_STRING];
 bool					Initialized = false;
 bool					CheckedAutoLootAll = false;  // used to check if Auto Loot All is checks
 bool					StartCursorTimer = true;  // 
-bool					StartDistributeLootTimer = true;  // 
 bool					bDistributeItemSucceeded = false; // Set true when you successfully distribute an item to a raid/group member
 bool					bDistributeItemFailed = false; // Set true when you fail distribute an item to a raid/group member
-LONG					DistributeI; //Index for looping over people in the group to try and distribute an item 
-LONG					DistributeK;  // Index for the item to be distributed
 DWORD					DestroyID;
 DWORD					CursorItemID;
-DWORD					DistributeItemID;
+map<string, string>		LootEntries; // Will be used by non-ML to make sure new loot entries are eventually added, when iNewItemDelay > 0 only the ML can add entries to loot.ini file... this can cause an issue when the ML/non-ML use different loot files
 char					szTemp[MAX_STRING];
 char					szCommand[MAX_STRING];
 char					szLogPath[MAX_STRING];
@@ -197,21 +194,21 @@ void CreateLootINI(void)
 
 void ShowInfo(void) // Outputs the variable settings into your MQ2 Window
 {
-	WriteChatfSafe("%s:: AutoLoot is %s", PLUGIN_CHAT_MSG, iUseAutoLoot ? "\agON\ax" : "\arOFF\ax");
-	WriteChatfSafe("%s:: Stop looting when \ag%d\ax slots are left", PLUGIN_CHAT_MSG, iSaveBagSlots);
-	WriteChatfSafe("%s:: Spam looting actions %s", PLUGIN_CHAT_MSG, iSpamLootInfo ? "\agON\ax" : "\arOFF\ax");
-	WriteChatfSafe("%s:: The master looter will wait \ag%d\ax seconds before trying to distribute loot", PLUGIN_CHAT_MSG, iDistributeLootDelay);
-	WriteChatfSafe("%s:: The master looter will wait \ag%d\ax seconds when a new item drops before looting that item", PLUGIN_CHAT_MSG, iNewItemDelay);
-	WriteChatfSafe("%s:: You will wait \ag%d\ax seconds before trying to autoinventory items on your cursor", PLUGIN_CHAT_MSG, iCursorDelay);
-	WriteChatfSafe("%s:: The minimum price for all items to be bartered is: \ag%d\ax", PLUGIN_CHAT_MSG, iBarMinSellPrice);
-	WriteChatfSafe("%s:: Logging loot actions for master looter is %s", PLUGIN_CHAT_MSG, iLogLoot ? "\agON\ax" : "\arOFF\ax");
-	WriteChatfSafe("%s:: Raid looting is turned: %s", PLUGIN_CHAT_MSG, iRaidLoot ? "\agON\ax" : "\arOFF\ax");
-	WriteChatfSafe("%s:: Your default number to keep of new quest items is: \ag%d\ax", PLUGIN_CHAT_MSG, iQuestKeep);
-	WriteChatfSafe("%s:: Your default for new no drop items is: \ag%s\ax", PLUGIN_CHAT_MSG, szNoDropDefault);
-	WriteChatfSafe("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag1);
-	WriteChatfSafe("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag2);
-	WriteChatfSafe("%s:: Your default permission for items put into your guild bank is: \ag%s\ax", PLUGIN_CHAT_MSG, szGuildItemPermission);
-	WriteChatfSafe("%s:: The location for your loot ini is:\n \ag%s\ax", PLUGIN_CHAT_MSG, szLootINI);
+	WriteChatf("%s:: AutoLoot is %s", PLUGIN_CHAT_MSG, iUseAutoLoot ? "\agON\ax" : "\arOFF\ax");
+	WriteChatf("%s:: Stop looting when \ag%d\ax slots are left", PLUGIN_CHAT_MSG, iSaveBagSlots);
+	WriteChatf("%s:: Spam looting actions %s", PLUGIN_CHAT_MSG, iSpamLootInfo ? "\agON\ax" : "\arOFF\ax");
+	WriteChatf("%s:: The master looter will wait \ag%d\ax seconds before trying to distribute loot", PLUGIN_CHAT_MSG, iDistributeLootDelay);
+	WriteChatf("%s:: The master looter will wait \ag%d\ax seconds when a new item drops before looting that item", PLUGIN_CHAT_MSG, iNewItemDelay);
+	WriteChatf("%s:: You will wait \ag%d\ax seconds before trying to autoinventory items on your cursor", PLUGIN_CHAT_MSG, iCursorDelay);
+	WriteChatf("%s:: The minimum price for all items to be bartered is: \ag%d\ax", PLUGIN_CHAT_MSG, iBarMinSellPrice);
+	WriteChatf("%s:: Logging loot actions for master looter is %s", PLUGIN_CHAT_MSG, iLogLoot ? "\agON\ax" : "\arOFF\ax");
+	WriteChatf("%s:: Raid looting is turned: %s", PLUGIN_CHAT_MSG, iRaidLoot ? "\agON\ax" : "\arOFF\ax");
+	WriteChatf("%s:: Your default number to keep of new quest items is: \ag%d\ax", PLUGIN_CHAT_MSG, iQuestKeep);
+	WriteChatf("%s:: Your default for new no drop items is: \ag%s\ax", PLUGIN_CHAT_MSG, szNoDropDefault);
+	WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag1);
+	WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag2);
+	WriteChatf("%s:: Your default permission for items put into your guild bank is: \ag%s\ax", PLUGIN_CHAT_MSG, szGuildItemPermission);
+	WriteChatf("%s:: The location for your loot ini is:\n \ag%s\ax", PLUGIN_CHAT_MSG, szLootINI);
 }
 
 bool DoThreadAction(void) // Do actions from threads that need to be in the pulse to stop crashing to desktop
@@ -226,7 +223,7 @@ bool DoThreadAction(void) // Do actions from threads that need to be in the puls
 		else
 		{
 			// Ok we failed to select the item to sell
-			WriteChatfSafe("%s:: We failed to pick up \ar%s\ax", PLUGIN_CHAT_MSG, pItemToPickUp->Item2->Name);
+			WriteChatf("%s:: We failed to pick up \ar%s\ax", PLUGIN_CHAT_MSG, pItemToPickUp->Item2->Name);
 			DebugSpew("%s:: We failed to pick up \ar%s\ax", PLUGIN_DEBUG_MSG, pItemToPickUp->Item2->Name);
 		}
 		pItemToPickUp = nullptr;
@@ -242,7 +239,7 @@ bool DoThreadAction(void) // Do actions from threads that need to be in the puls
 		else
 		{
 			// Ok we failed to select the item to sell
-			WriteChatfSafe("%s:: We failed to left clicking a button", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: We failed to left clicking a button", PLUGIN_CHAT_MSG);
 			DebugSpew("%s:: We failed to left clicking a button", PLUGIN_DEBUG_MSG);
 		}
 		pWndLeftMouseUp = nullptr;
@@ -256,40 +253,39 @@ bool CheckCursor(void)  // Returns true if an item is on your cursor
 	PCHARINFO2 pChar2 = GetCharInfo2();
 	if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
 	{
-		if (PCONTENTS pItem = pChar2->pInventoryArray->Inventory.Cursor)
+		if (PITEMINFO pItem = GetItemFromContents(pChar2->pInventoryArray->Inventory.Cursor))
 		{
 			if (!WinState((CXWnd*)pTradeWnd) && !WinState((CXWnd*)pGiveWnd) && !WinState((CXWnd*)pMerchantWnd) && !WinState((CXWnd*)pBankWnd) && !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")) && !WinState((CXWnd*)FindMQ2Window("TradeskillWnd")))
 			{
 				if (StartCursorTimer)  // Going to set CursorItemID and CursorTimer
 				{
 					StartCursorTimer = false;
-					CursorItemID = pItem->ID;
+					CursorItemID = pItem->ItemNumber;
 					CursorTimer = pluginclock::now() + std::chrono::seconds(iCursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
 				}
-				else if (CursorItemID != pItem->ID) // You changed items on your cursor, time to reset CursorItemID and CursorTimer
+				else if (CursorItemID != pItem->ItemNumber) // You changed items on your cursor, time to reset CursorItemID and CursorTimer
 				{
-					CursorItemID = pItem->ID;
+					CursorItemID = pItem->ItemNumber;
 					CursorTimer = pluginclock::now() + std::chrono::seconds(iCursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
 				}
 				else if (pluginclock::now() > CursorTimer)  // Waited CursorDelay, now going to see if you have room to autoinventory the item on your cursor
 				{
-					if (FitInInventory(pItem->Item2->Size))
+					if (FitInInventory(pItem->Size))
 					{
 						if (iSpamLootInfo) 
 						{ 
-							WriteChatfSafe("%s:: Putting \ag%s\ax into my inventory", PLUGIN_CHAT_MSG, pItem->Item2->Name); 
+							WriteChatf("%s:: Putting \ag%s\ax into my inventory", PLUGIN_CHAT_MSG, pItem->Name); 
 						}
 						DoCommand(GetCharInfo()->pSpawn, "/autoinventory");
-						StartCursorTimer = true;
 					}
 					else
 					{
 						if (iSpamLootInfo) 
 						{ 
-							WriteChatfSafe("%s:: \ag%s\ax doesn't fit into my inventory", PLUGIN_CHAT_MSG, pItem->Item2->Name); 
+							WriteChatf("%s:: \ag%s\ax doesn't fit into my inventory", PLUGIN_CHAT_MSG, pItem->Name); 
 						}
-						StartCursorTimer = true;
 					}
+					StartCursorTimer = true;
 				}
 			}
 		}
@@ -315,23 +311,24 @@ bool DestroyStuff(void)
 	{
 		if (iSpamLootInfo) 
 		{ 
-			WriteChatfSafe("%s:: Destroying timer ran out, moving on!", PLUGIN_CHAT_MSG); 
+			WriteChatf("%s:: Destroying timer ran out, moving on!", PLUGIN_CHAT_MSG); 
 		}
 		DestroyID = 0;
-		return false;
+		return true;
 	}
 	// Looping through the items in my inventory and seening if I want to sell/deposit them based on which window was open
 	if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
 	{
-		if (PCONTENTS pItem = pChar2->pInventoryArray->Inventory.Cursor)
+		if (PITEMINFO pItem = GetItemFromContents(pChar2->pInventoryArray->Inventory.Cursor))
 		{
-			if (pItem->ID == DestroyID)
+			if (pItem->ItemNumber == DestroyID)
 			{
 				if (iSpamLootInfo) 
 				{ 
-					WriteChatfSafe("%s:: Destroying \ar%s\ax!", PLUGIN_CHAT_MSG, pItem->Item2->Name); 
+					WriteChatf("%s:: Destroying \ar%s\ax!", PLUGIN_CHAT_MSG, pItem->Name); 
 				}
 				DoCommand(GetCharInfo()->pSpawn, "/destroy");
+				LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 				DestroyID = 0;
 				return true;
 			}
@@ -346,7 +343,7 @@ bool DestroyStuff(void)
 				if (pItem->ID == DestroyID)
 				{
 					PickupItem(eItemContainerPossessions, pItem);
-					LootTimer = pluginclock::now() + std::chrono::milliseconds(100);
+					LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 					return true;
 				}
 			}
@@ -369,7 +366,7 @@ bool DestroyStuff(void)
 								if (pItem->ID == DestroyID)
 								{
 					                PickupItem(eItemContainerPossessions, pItem);
-									LootTimer = pluginclock::now() + std::chrono::milliseconds(100);
+									LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 									return true;
 								}
 							}
@@ -415,7 +412,7 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 											{
 												if (iSpamLootInfo) 
 												{ 
-													WriteChatfSafe("%s:: Accepting a no drop item", PLUGIN_CHAT_MSG); 
+													WriteChatf("%s:: Accepting a no drop item", PLUGIN_CHAT_MSG); 
 												}
 												SendWndClick2(pWndButton, "leftmouseup");
 												LootTimer = pluginclock::now() + std::chrono::milliseconds(1000);
@@ -433,7 +430,7 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 						{
 							if (iSpamLootInfo) 
 							{ 
-								WriteChatfSafe("%s:: Accepting a no drop item", PLUGIN_CHAT_MSG); 
+								WriteChatf("%s:: Accepting a no drop item", PLUGIN_CHAT_MSG); 
 							}
 							SendWndClick2(pWndButton, "leftmouseup");
 							LootTimer = pluginclock::now() + std::chrono::milliseconds(1000);
@@ -471,6 +468,27 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 		}
 	}
 	return false;
+}
+
+void ClearLootEntries(void) // Clears out the LootEntries from the non-ML toons
+{
+	while (!LootEntries.empty())
+	{
+		WriteChatf("%s:: The \ag%s\ax is not in the database, setting it to \ag%s\ax now that the advanced loot window is gone", PLUGIN_CHAT_MSG, LootEntries.begin()->first.c_str(), LootEntries.begin()->second.c_str());
+		CHAR Value[MAX_STRING];
+		CHAR ItemName[MAX_STRING];
+		CHAR INISection[MAX_STRING];
+		CHAR LootEntry[MAX_STRING];
+		Value[0] = '\0';
+		sprintf_s(ItemName, "%s", LootEntries.begin()->first.c_str());
+		sprintf_s(INISection, "%c", LootEntries.begin()->first.at(0));
+		sprintf_s(LootEntry, "%s", LootEntries.begin()->second.c_str());
+		if (GetPrivateProfileString(INISection, ItemName, 0, Value, MAX_STRING, szLootINI) == 0)
+		{
+			WritePrivateProfileString(INISection, ItemName, LootEntry, szLootINI);
+		}
+		LootEntries.erase(LootEntries.begin());
+	}
 }
 
 bool SetLootSettings(void) // Turn off Auto Loot All
@@ -523,7 +541,7 @@ bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, P
 					bool IWant = false;  // Will be set true if you want and can accept the item
 					bool CheckIfOthersWant = false;  // Will be set true if I am ML and I can't accept or don't need
 					char szLootAction[MAX_STRING];
-					if (ParseLootEntry(ItemOnCursor, pChar2, pPersonalItem, true, szLootAction, &IWant, &CheckIfOthersWant))
+					if (ParseLootEntry(ItemOnCursor, pChar, pChar2, pPersonalItem, true, szLootAction, &IWant, &CheckIfOthersWant))
 					{
 						// Ok we had a valid loot entry, lets do shit
 						if (LootInProgress(pAdvLoot, pPersonalList, pSharedList))
@@ -536,7 +554,7 @@ bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, P
 							{
 								if (iSpamLootInfo) 
 								{ 
-									WriteChatfSafe("%s:: PList: looting \ar%s\ax to destoy it", PLUGIN_CHAT_MSG, pPersonalItem->Name); 
+									WriteChatf("%s:: PList: looting \ar%s\ax to destoy it", PLUGIN_CHAT_MSG, pPersonalItem->Name); 
 								}
 								if (iLogLoot)
 								{
@@ -550,7 +568,7 @@ bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, P
 							{
 								if (iSpamLootInfo) 
 								{ 
-									WriteChatfSafe("%s:: PList: Setting \ag%s\ax to loot", PLUGIN_CHAT_MSG, pPersonalItem->Name); 
+									WriteChatf("%s:: PList: Setting \ag%s\ax to loot", PLUGIN_CHAT_MSG, pPersonalItem->Name); 
 								}
 								if (iLogLoot)
 								{
@@ -576,7 +594,7 @@ bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, P
 						{
 							if (iSpamLootInfo) 
 							{ 
-								WriteChatfSafe("%s:: PList: Setting \ag%s\ax to leave", PLUGIN_CHAT_MSG, pPersonalItem->Name); 
+								WriteChatf("%s:: PList: Setting \ag%s\ax to leave", PLUGIN_CHAT_MSG, pPersonalItem->Name); 
 							}
 							if (iLogLoot)
 							{
@@ -606,64 +624,11 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 {
 	if (pSharedList)
 	{
-		bool MasterLooter = false;
-		//If I don't have a masterlooter set and I am leader I will set myself master looter
-		if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
+		bool bMasterLooter = false;
+		if (!AmITheMasterLooter(pChar, &bMasterLooter)) // if it returns false, the plugin should stop doing loot stuff this pulse 
 		{
-			int ml = 0;
-			for (ml = 0; ml < 72; ml++)
-			{
-				if (pRaid->RaidMemberUsed[ml] && pRaid->RaidMember[ml].MasterLooter)
-				{
-					if (!_stricmp(pChar->Name, pRaid->RaidMember[ml].Name))
-					{
-						MasterLooter = true;
-					}
-					break;
-				}
-			}
-			if (ml == 72)
-			{
-				if (!_stricmp(pChar->Name, pRaid->RaidLeaderName))
-				{
-					MasterLooter = true;
-				}
-			}
+			return true;
 		}
-		else // Ok so we're not in a raid, maybe we are in a group
-		{
-			if (pChar->pGroupInfo && pChar->pGroupInfo->pMember && pChar->pGroupInfo->pMember[0])
-			{
-				int ml = 0;
-				for (ml = 0; ml < 6; ml++)
-				{
-					if (pChar->pGroupInfo->pMember[ml] && pChar->pGroupInfo->pMember[ml]->pName && pChar->pGroupInfo->pMember[ml]->MasterLooter)
-					{
-						break;
-					}
-				}
-				if (ml == 6 && pChar->pGroupInfo->pLeader && pChar->pGroupInfo->pLeader->pSpawn && pChar->pGroupInfo->pLeader->pSpawn->SpawnID)
-				{
-					if (pChar->pGroupInfo->pLeader->pSpawn->SpawnID == pChar->pSpawn->SpawnID)  // oh shit we have loot and no master looter set yet and I am the leader, so lets make me the leader
-					{
-						WriteChatfSafe("%s:: I am setting myself to master looter", PLUGIN_CHAT_MSG);
-						sprintf_s(szCommand, "/grouproles set %s 5", pChar->Name);
-						DoCommand(GetCharInfo()->pSpawn, szCommand);
-						LootTimer = pluginclock::now() + std::chrono::seconds(5);  //Two seconds was too short, it attempts to set masterlooter a second time.  Setting to 5 seconds that should fix this
-						return true;
-					}
-				}
-				if (pChar->pGroupInfo->pMember[0]->MasterLooter) 
-				{ 
-					MasterLooter = true; 
-				}
-			}
-			else
-			{
-				return true; // There is no way this should happen, but incase it does I want the plugin to ignore shit
-			}
-		}
-
 		//Loop over the item array to find see if I need to set something
 		for (LONG k = 0; k < pSharedList->ItemsArray.Count; k++)
 		{
@@ -673,128 +638,126 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 				DWORD multiplier = sizeof(LOOTITEM) * listindex;
 				if (PLOOTITEM pShareItem = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
 				{
-					if (!StartDistributeLootTimer) // I am checking if the item has successfully been passed out
+					if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
 					{
-						if (DistributeK == k)
-						{
-							if (DistributeItemID != pShareItem->ItemID)
-							{
-								StartDistributeLootTimer = true;
-							}
-						}
-					}
-					if (!pShareItem->AutoRoll && !pShareItem->No && !pShareItem->Need && !pShareItem->Greed) // Ok lets check to see if we have any of the boxes check
-					{
-						if (pShareItem->bAutoRoll && pShareItem->AskTimer > 0 || !pShareItem->bAutoRoll) // Ok if the master looter has set the item to AutoRoll and the AskTimer is greater then 0 I can proceed, otherwise it cause some annoying spamming of the everquest... Thanks to Chatwiththisname
-						{
-							bool IWant = false;  // Will be set true if you want and can accept the item
-							bool CheckIfOthersWant = false;  // Will be set true if I am ML and I can't accept or don't need
-							char szLootAction[MAX_STRING];
-							if (ParseLootEntry(ItemOnCursor, pChar2, pShareItem, MasterLooter, szLootAction, &IWant, &CheckIfOthersWant))
-							{
-								// Ok we had a valid loot entry, lets do shit
-								if (LootInProgress(pAdvLoot, pPersonalList, pSharedList))
+						if (!pShareItem->AutoRoll && !pShareItem->No && !pShareItem->Need && !pShareItem->Greed) 
+						{ // Ok lets check to see if we have any of the boxes check
+							if (pShareItem->bAutoRoll && pShareItem->AskTimer > 0 || !pShareItem->bAutoRoll) 
+							{ // Ok if the master looter has set the item to AutoRoll and the AskTimer is greater then 0 I can proceed, otherwise it cause some annoying spamming of the everquest... Thanks to Chatwiththisname
+								bool IWant = false;  // Will be set true if you want and can accept the item
+								bool CheckIfOthersWant = false;  // Will be set true if I am ML and I can't accept or don't need
+								char szLootAction[MAX_STRING];
+								if (ParseLootEntry(ItemOnCursor, pChar, pChar2, pShareItem, bMasterLooter, szLootAction, &IWant, &CheckIfOthersWant))
 								{
-									return true;
-								}
-								if (MasterLooter)
-								{
-									if (CheckIfOthersWant)
+									// Ok we had a valid loot entry, lets do shit
+									if (LootInProgress(pAdvLoot, pPersonalList, pSharedList))
 									{
-										LootTimer = pluginclock::now() + std::chrono::seconds(iDistributeLootDelay) + std::chrono::seconds(30); // Lets lock out the plugin from doing loot actions while we attempt to pass out items
-										DWORD nThreadID = 0;
-										CreateThread(NULL, NULL, PassOutLoot, (PVOID)0, 0, &nThreadID);
 										return true;
 									}
-									else if (IWant)
+									if (bMasterLooter)
 									{
-										if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
+										if (bDistributeItemFailed)
+										{
+											WriteChatf("%s:: SList: Attempting to pass out \ag%s\ax since apparently it is lore and I have it in my parcels... please stop storing shit in parcels like Tone", PLUGIN_CHAT_MSG, pShareItem->Name);
+											CheckIfOthersWant = true;
+											bDistributeItemFailed = false;
+										}
+										if (CheckIfOthersWant)
+										{
+											DWORD nThreadID = 0;
+											CreateThread(NULL, NULL, PassOutLoot, (PVOID)k, 0, &nThreadID);
+											LootTimer = pluginclock::now() + std::chrono::seconds(iDistributeLootDelay) + std::chrono::seconds(30); // Lets lock out the plugin from doing loot actions while we attempt to pass out items
+											return true;
+										}
+										if (IWant)
 										{
 											//I want and I am the master looter
-											if (iSpamLootInfo) 
-											{ 
-												WriteChatfSafe("%s:: SList: Giving \ag%s\ax to me", PLUGIN_CHAT_MSG, pShareItem->Name); 
+											if (iSpamLootInfo)
+											{
+												WriteChatf("%s:: SList: Giving \ag%s\ax to me", PLUGIN_CHAT_MSG, pShareItem->Name);
 											}
 											if (iLogLoot)
 											{
 												sprintf_s(szTemp, "%s :: SList: looting %s", pChar->Name, pShareItem->Name);
 												CreateLogEntry(szTemp);
 											}
-											LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+											bDistributeItemFailed = false; // This is needed to check if I have the item in parcels and it is lore due to that information being kept server side
 											pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 0, pShareItem->LootDetails.m_array[0].StackCount);
-											return true;
 										}
 										else
 										{
-											DebugSpew("%s:: SList: Attempted to loot on an item but couldn't due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
-											return true;
-										}
-									}
-									else
-									{
-										if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
-										{
 											//I don't want and am the master looter
-											if (iSpamLootInfo) 
-											{ 
-												WriteChatfSafe("%s:: SList: Setting \ag%s\ax to leave", PLUGIN_CHAT_MSG, pShareItem->Name); 
+											if (iSpamLootInfo)
+											{
+												WriteChatf("%s:: SList: Setting \ag%s\ax to leave", PLUGIN_CHAT_MSG, pShareItem->Name);
 											}
 											if (iLogLoot)
 											{
 												sprintf_s(szTemp, "%s :: SList: leaving %s", pChar->Name, pShareItem->Name);
 												CreateLogEntry(szTemp);
 											}
-											LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 											pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 1, pShareItem->LootDetails.m_array[0].StackCount);
-											return true;
-										}
-										else
-										{
-											DebugSpew("%s:: SList: Attempted to leave on an item but couldn't due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
-											return true;
-										}
-									}
-								} 
-								else
-								{
-									if (IWant)
-									{
-										//I want and i am not the master looter
-										if (iSpamLootInfo) 
-										{ 
-											WriteChatfSafe("%s:: SList: Setting \ag%s\ax to need", PLUGIN_CHAT_MSG, pShareItem->Name); 
 										}
 										LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-										if (CXWnd *pwnd = GetAdvLootSharedListItem(listindex, 9)) 
-										{ 
-											SendWndClick2(pwnd, "leftmouseup"); 
-										} // Setting to need
 										return true;
 									}
 									else
 									{
-										//I don't want and i am not the master looter
-										if (iSpamLootInfo) 
-										{ 
-											WriteChatfSafe("%s:: SList: Setting \ag%s\ax to no", PLUGIN_CHAT_MSG, pShareItem->Name); 
+										if (IWant)
+										{
+											//I want and i am not the master looter
+											if (iSpamLootInfo)
+											{
+												WriteChatf("%s:: SList: Setting \ag%s\ax to greed", PLUGIN_CHAT_MSG, pShareItem->Name);
+											}
+											if (CXWnd *pwnd = GetAdvLootSharedListItem(listindex, 10)) // 9 = need, 10 = greed
+											{
+												SendWndClick2(pwnd, "leftmouseup"); // Setting to greed
+											}
+										}
+										else
+										{
+											//I don't want and i am not the master looter
+											if (iSpamLootInfo)
+											{
+												WriteChatf("%s:: SList: Setting \ag%s\ax to no", PLUGIN_CHAT_MSG, pShareItem->Name);
+											}
+											if (CXWnd *pwnd = GetAdvLootSharedListItem(listindex, 11)) // Setting to no
+											{
+												SendWndClick2(pwnd, "leftmouseup");
+											}
 										}
 										LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-										if (CXWnd *pwnd = GetAdvLootSharedListItem(listindex, 11)) 
-										{ 
-											SendWndClick2(pwnd, "leftmouseup"); 
-										} // Setting to no
 										return true;
 									}
 								}
-							}
-							else
-							{
-								// Ok, we did not have a valid entry lets bug out
-								return true;
+								else
+								{
+									// Ok, we did not have a valid entry lets bug out
+									return true;
+								}
 							}
 						}
 					}
+					else
+					{
+						DebugSpew("%s:: SList: Attempted to leave on an item but couldn't due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
+					}
 				}
+				else
+				{
+					DebugSpew("%s:: SList: Unable to access PLOOTITEM for item number = %d", PLUGIN_DEBUG_MSG, k);
+				}
+			}
+			else
+			{
+				DebugSpew("%s:: SList: listindex = %d, for item number = %d", PLUGIN_DEBUG_MSG, listindex, k);
+			}
+			// Ok we need to stop non-master looter from getting items on their cursors by clicking a bunch of items that they want when there are only a few free bag slots available and then the ML passing them all to them putting items on their cursor with no place to put them
+			if (!ContinueCheckingSharedLoot()) // TODO make this smarter by determining if items stack etc
+			{
+				// Ok this is an attempt to keep the non-master 
+				return true;
 			}
 		}
 	}
@@ -837,7 +800,90 @@ bool HandleEQBC(void)
 	return false;
 }
 
-bool ParseLootEntry(bool ItemOnCursor, PCHARINFO2 pChar2, PLOOTITEM pLootItem, bool bMasterLooter, char* pszItemAction, bool* pbIWant, bool* pbCheckIfOthersWant)
+bool AmITheMasterLooter(PCHARINFO pChar, bool* pbMasterLooter) // Determines if the character is the master looter, if it has to set a master looter it instructs the plugin to pause looting
+{
+	//If I don't have a masterlooter set and I am leader I will set myself master looter
+	if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
+	{
+		int ml = 0;
+		for (ml = 0; ml < 72; ml++)
+		{
+			if (pRaid->RaidMemberUsed[ml])
+			{
+				if (pRaid->RaidMember[ml].MasterLooter) // we found the ML
+				{
+					if (!_stricmp(pChar->Name, pRaid->RaidMember[ml].Name)) // Ok so I am the ML
+					{
+						*pbMasterLooter = true;
+					}
+					return true;
+				}
+			}
+		}
+		if (ml == 72)
+		{
+			if (!_stricmp(pChar->Name, pRaid->RaidLeaderName)) // Ok so we don't have a ML set, lets use the raid leader to handle loot 
+			{
+				*pbMasterLooter = true;
+			}
+		}
+		return true;
+	}
+	else // Ok so we're not in a raid, maybe we are in a group
+	{
+		if (pChar->pGroupInfo && pChar->pGroupInfo->pMember && pChar->pGroupInfo->pMember[0])
+		{
+			int ml = 0;
+			for (ml = 0; ml < 6; ml++) // Lets loop through the group and see if we can find the ML
+			{
+				if (pChar->pGroupInfo->pMember[ml])
+				{
+					if (pChar->pGroupInfo->pMember[ml]->MasterLooter) // Ok we found the ML
+					{
+						if (pChar->pGroupInfo->pMember[ml]->pName) // and we know their name
+						{
+							CHAR Name[MAX_STRING] = { 0 };
+							GetCXStr(pChar->pGroupInfo->pMember[ml]->pName, Name, MAX_STRING);
+							if (!_stricmp(pChar->Name, Name)) // Ok so I am the ML
+							{
+								*pbMasterLooter = true;
+							}
+							return true;
+						}
+					}
+				}
+			}
+			if (ml == 6) // Ok we didn't find the ML 
+			{
+				if (pChar->pGroupInfo->pLeader)
+				{
+					if (pChar->pGroupInfo->pLeader->pSpawn)
+					{
+						if (pChar->pGroupInfo->pLeader->pSpawn->SpawnID)
+						{
+							if (pChar->pGroupInfo->pLeader->pSpawn->SpawnID == pChar->pSpawn->SpawnID)  // I am the leader, so lets make me the ML
+							{
+								WriteChatf("%s:: I am setting myself to master looter", PLUGIN_CHAT_MSG);
+								sprintf_s(szCommand, "/grouproles set %s 5", pChar->Name);
+								DoCommand(GetCharInfo()->pSpawn, szCommand);
+								LootTimer = pluginclock::now() + std::chrono::seconds(5);  //Two seconds was too short, it attempts to set masterlooter a second time.  Setting to 5 seconds that should fix this
+								return false;
+							}
+						}
+					}
+				}
+			}
+			return true;
+		}
+		else
+		{
+			return false; // There is no way this should happen, but incase it does I want the plugin to ignore shit
+		}
+	}
+	return false; // no fucking way this would ever happen, since this only gets called when doing shared loot stuff
+}
+
+bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOTITEM pLootItem, bool bMasterLooter, char* pszItemAction, bool* pbIWant, bool* pbCheckIfOthersWant)
 {
 	CHAR INISection[]{ pLootItem->Name[0],'\0' };
 	CHAR Value[MAX_STRING];
@@ -845,16 +891,42 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO2 pChar2, PLOOTITEM pLootItem, b
 	if (GetPrivateProfileString(INISection, pLootItem->Name, 0, Value, MAX_STRING, szLootINI) == 0)
 	{
 		// Ok, so this item isn't in the loot.ini file.
-		InitialLootEntry(pLootItem);
 		if (iNewItemDelay > 0)
 		{
-			LootTimer = pluginclock::now() + std::chrono::seconds(iNewItemDelay); // Lets lock out the plugin from doing loot actions till newitemdelay is up
-			if (iSpamLootInfo) 
-			{ 
-				WriteChatfSafe("%s:: The \ag%s\ax is not in the database, you have \ar%d\ax seconds to deal with it manually", PLUGIN_CHAT_MSG, pLootItem->Name, iNewItemDelay);
+			if (bMasterLooter) // Ok so we are only going to let the ML write to the file for new entries, this way they know to delay 
+			{
+				InitialLootEntry(pLootItem, true);
+				LootTimer = pluginclock::now() + std::chrono::seconds(iNewItemDelay); // Lets lock out the plugin from doing loot actions till newitemdelay is up
+				if (iSpamLootInfo)
+				{
+					WriteChatf("%s:: The \ag%s\ax is not in the database, you have \ar%d\ax seconds to deal with it manually", PLUGIN_CHAT_MSG, pLootItem->Name, iNewItemDelay);
+				}
 			}
-			return false;
+			else
+			{ // Ok lets populate the loot entry after the advanced loot window is not open
+				InitialLootEntry(pLootItem, false);
+				// Ok so lets handle this item like we would if we a loot entry
+				if (!ItemOnCursor && !pLootItem->LootDetails.m_array[0].Locked && DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) && !CheckIfItemIsLoreByID(pLootItem->ItemID))
+				{
+					if (pLootItem->NoDrop)
+					{
+						CHAR *pParsedToken = NULL;
+						CHAR *pParsedValue = strtok_s(szNoDropDefault, "|", &pParsedToken);
+						if (!_stricmp(pParsedValue, "Ignore"))
+						{
+							return true;
+						}
+					}
+					*pbIWant = true;
+				}
+				return true;
+			}
 		}
+		else
+		{
+			InitialLootEntry(pLootItem, true);
+		}
+		return false;
 	}
 	else
 	{
@@ -862,52 +934,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO2 pChar2, PLOOTITEM pLootItem, b
 		char *pParsedToken = NULL;
 		char *pParsedValue = strtok_s(Value, "|", &pParsedToken);
 		strcpy_s(pszItemAction, sizeof(char[MAX_STRING]), pParsedValue);
-		if (!_stricmp(pParsedValue, "Keep"))
-		{
-			if ((ItemOnCursor || pLootItem->LootDetails.m_array[0].Locked || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
-			{
-				if (bMasterLooter)
-				{
-					*pbCheckIfOthersWant = true;
-				}
-			}
-			else
-			{
-				*pbIWant = true;
-			}
-			return true;
-		}
-		else if (!_stricmp(pParsedValue, "Deposit"))
-		{
-			if ((ItemOnCursor || pLootItem->LootDetails.m_array[0].Locked || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
-			{
-				if (bMasterLooter)
-				{
-					*pbCheckIfOthersWant = true;
-				}
-			}
-			else
-			{
-				*pbIWant = true;
-			}
-			return true;
-		}
-		else if (!_stricmp(pParsedValue, "Sell"))
-		{
-			if ((ItemOnCursor || pLootItem->LootDetails.m_array[0].Locked || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
-			{
-				if (bMasterLooter)
-				{
-					*pbCheckIfOthersWant = true;
-				}
-			}
-			else
-			{
-				*pbIWant = true;
-			}
-			return true;
-		}
-		else if (!_stricmp(pParsedValue, "Barter"))
+		if (!_stricmp(pParsedValue, "Keep") || !_stricmp(pParsedValue, "Deposit") || !_stricmp(pParsedValue, "Sell") || !_stricmp(pParsedValue, "Barter"))
 		{
 			if ((ItemOnCursor || pLootItem->LootDetails.m_array[0].Locked || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
 			{
@@ -940,7 +967,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO2 pChar2, PLOOTITEM pLootItem, b
 		{
 			return true;
 		}
-		if (!_stricmp(pParsedValue, "Quest"))
+		else if (!_stricmp(pParsedValue, "Quest"))
 		{
 			DWORD QuestNumber;
 			pParsedValue = strtok_s(NULL, "|", &pParsedToken);
@@ -949,7 +976,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO2 pChar2, PLOOTITEM pLootItem, b
 				QuestNumber = 1;
 				if (iSpamLootInfo) 
 				{ 
-					WriteChatfSafe("%s:: You did not set the quest number for \ag%s\ax, changing it to Quest|1", PLUGIN_CHAT_MSG, pLootItem->Name); 
+					WriteChatf("%s:: You did not set the quest number for \ag%s\ax, changing it to Quest|1", PLUGIN_CHAT_MSG, pLootItem->Name); 
 				}
 				WritePrivateProfileString(INISection, pLootItem->Name, "Quest|1", szLootINI);
 			}
@@ -982,19 +1009,19 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO2 pChar2, PLOOTITEM pLootItem, b
 			{
 				if (PCONTENTS pItem = FindBankItemByID(pLootItem->ItemID))
 				{
-					WriteChatfSafe("%s:: Found:\ag%s\ax, in my bank!", PLUGIN_CHAT_MSG, pLootItem->Name);
+					WriteChatf("%s:: Found:\ag%s\ax, in my bank!", PLUGIN_CHAT_MSG, pLootItem->Name);
 					CreateLootEntry("Gear", "", GetItemFromContents(pItem));
 					return false;
 				}
 				else if (PCONTENTS pItem = FindItemByID(pLootItem->ItemID))
 				{
-					WriteChatfSafe("%s:: Found:\ag%s\ax, in my packs!", PLUGIN_CHAT_MSG, pLootItem->Name);
+					WriteChatf("%s:: Found:\ag%s\ax, in my packs!", PLUGIN_CHAT_MSG, pLootItem->Name);
 					CreateLootEntry("Gear", "", GetItemFromContents(pItem));
 					return false;
 				}
 				else
 				{
-					WriteChatfSafe("%s:: \ag%s\ax hasn't ever had classes set, setting it to loot!", PLUGIN_CHAT_MSG, pLootItem->Name);
+					WriteChatf("%s:: \ag%s\ax hasn't ever had classes set, setting it to loot!", PLUGIN_CHAT_MSG, pLootItem->Name);
 					*pbIWant = true;
 					return true;
 				}
@@ -1013,7 +1040,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO2 pChar2, PLOOTITEM pLootItem, b
 						GearNumber = 1;
 						if (iSpamLootInfo) 
 						{ 
-							WriteChatfSafe("%s:: You did not set the Gear Number for \ag%s\ax, Please change your loot ini entry", PLUGIN_CHAT_MSG, pLootItem->Name); 
+							WriteChatf("%s:: You did not set the Gear Number for \ag%s\ax, Please change your loot ini entry", PLUGIN_CHAT_MSG, pLootItem->Name); 
 						}
 					}
 					else
@@ -1043,44 +1070,65 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO2 pChar2, PLOOTITEM pLootItem, b
 		else
 		{
 			// Oh shit this isn't a valid loot entry, lets remake it using the default
-			InitialLootEntry(pLootItem);
+			InitialLootEntry(pLootItem, true);
 		}
 	}
 	return false;
 }
 
-void InitialLootEntry(PLOOTITEM pLootItem)
+void InitialLootEntry(PLOOTITEM pLootItem, bool bCreateImmediately)
 {
 	if (pLootItem)
 	{
-		CHAR INISection[]{ pLootItem->Name[0],'\0' };
-		if (pLootItem->NoDrop)
+		if (pLootItem->Name)
 		{
+			CHAR INISection[]{ pLootItem->Name[0],'\0' };
 			CHAR LootEntry[MAX_STRING] = { 0 };
-			CHAR *pParsedToken = NULL;
-			CHAR *pParsedValue = strtok_s(szNoDropDefault, "|", &pParsedToken);
-			if (!_stricmp(pParsedValue, "Quest"))
+			if (pLootItem->NoDrop)
 			{
-				sprintf_s(LootEntry, "%s|%d", pParsedValue, iQuestKeep);
-			}
-			else if (!_stricmp(pParsedValue, "Keep") || !_stricmp(pParsedValue, "Ignore"))
-			{
-				sprintf_s(LootEntry, "%s", pParsedValue);
+				CHAR *pParsedToken = NULL;
+				CHAR *pParsedValue = strtok_s(szNoDropDefault, "|", &pParsedToken);
+				if (!_stricmp(pParsedValue, "Quest"))
+				{
+					sprintf_s(LootEntry, "%s|%d", pParsedValue, iQuestKeep);
+				}
+				else if (!_stricmp(pParsedValue, "Keep") || !_stricmp(pParsedValue, "Ignore"))
+				{
+					sprintf_s(LootEntry, "%s", pParsedValue);
+				}
+				else
+				{
+					sprintf_s(LootEntry, "Quest|1");
+				}
 			}
 			else
 			{
-				sprintf_s(LootEntry, "Quest|1");
+				sprintf_s(LootEntry, "Keep");
 			}
-			WriteChatfSafe("%s:: The \ag%s\ax is not in the database, setting it to %s", PLUGIN_CHAT_MSG, pLootItem->Name, LootEntry);
-			WritePrivateProfileString(INISection, pLootItem->Name, LootEntry, szLootINI);
-		}
-		else
-		{
-			if (iSpamLootInfo) 
-			{ 
-				WriteChatfSafe("%s:: The \ag%s\ax is not in the database, setting it to Keep", PLUGIN_CHAT_MSG, pLootItem->Name); 
+			if (bCreateImmediately)
+			{
+				WritePrivateProfileString(INISection, pLootItem->Name, LootEntry, szLootINI);
+				WriteChatf("%s:: The \ag%s\ax is not in the database, setting it to \ag%s\ax", PLUGIN_CHAT_MSG, pLootItem->Name, LootEntry);
 			}
-			WritePrivateProfileString(INISection, pLootItem->Name, "Keep", szLootINI);
+			else
+			{
+				if (LootEntries.empty())
+				{
+					WriteChatf("%s:: LootEntries is emtpy, saving \ag%s\ax to LootEntries", PLUGIN_CHAT_MSG, pLootItem->Name);
+					LootEntries[pLootItem->Name] = LootEntry;
+					WriteChatf("%s:: The \ag%s\ax is not in the database, setting it to \ag%s\ax once the advanced loot window is gone", PLUGIN_CHAT_MSG, LootEntries.begin()->first.c_str(), LootEntries.begin()->second.c_str());
+				}
+				else
+				{
+					map<string, string>::iterator it;
+					it = LootEntries.find(pLootItem->Name);
+					if (it == LootEntries.end())
+					{
+						WriteChatf("%s:: LootEntries doesn't have \ag%s\ax saving it to LootEntries", PLUGIN_CHAT_MSG, pLootItem->Name);
+						LootEntries[pLootItem->Name] = LootEntry;
+					}
+				}
+			}
 		}
 	}
 	return;
@@ -1132,7 +1180,7 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
-					if (pItemPack->Type == ITEMTYPE_PACK && (_stricmp(pItemPack->Name, szExcludedBag1) || _stricmp(pItemPack->Name, szExcludedBag2)))
+					if (pItemPack->Type == ITEMTYPE_PACK)
 					{
 						if (pPack->Contents.ContainedItems.pItems)
 						{
@@ -1159,13 +1207,19 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 								}
 								else
 								{
-									Count++;
+									if (_stricmp(pItemPack->Name, szExcludedBag1) || _stricmp(pItemPack->Name, szExcludedBag2))
+									{ 
+										Count++;
+									}
 								}
 							}
 						}
 						else
 						{
-							Count = Count + pItemPack->Slots;
+							if (_stricmp(pItemPack->Name, szExcludedBag1) || _stricmp(pItemPack->Name, szExcludedBag2))
+							{ 
+								Count = Count + pItemPack->Slots;
+							}
 						}
 					}
 				}
@@ -1269,6 +1323,7 @@ DWORD FindItemCount(CHAR* pszItemName)
 	DWORD Count = 0;
 	DWORD nAug = 0;
 	PCHARINFO2 pChar2 = GetCharInfo2();
+	// I explicitly don't check cursor since we don't loot anything when an item is on our cursor
 	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
 	{
 		for (unsigned long nSlot = 0; nSlot < NUM_INV_SLOTS; nSlot++) //NUM_INV_SLOTS == 33
@@ -1559,31 +1614,36 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 {
 	if (!InGameOK()) 
 	{ 
-		return 0; 
+		LootTimer = pluginclock::now();
+		return 0;
 	}
-	if (PCHARINFO pChar = GetCharInfo())
+	if (!WinState((CXWnd*)pAdvancedLootWnd))
 	{
-		if (!WinState((CXWnd*)pAdvancedLootWnd))
+		LootTimer = pluginclock::now();
+		return 0;
+	}
+	PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd;
+	if (!pAdvLoot)
+	{
+		LootTimer = pluginclock::now();
+		return 0;
+	}
+	CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
+	CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList;
+	if (LootInProgress(pAdvLoot, pPersonalList, pSharedList))
+	{
+		LootTimer = pluginclock::now();
+		return 0;
+	}
+	LONG k = (LONG)pData;
+	if (pSharedList->GetItemData(k) != -1)
+	{
+		DWORD multiplier = sizeof(LOOTITEM) * pSharedList->GetItemData(k);
+		if (PLOOTITEM pShareItem = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
 		{
-			return 0;
-		}
-		PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd;
-		if (!pAdvLoot)
-		{
-			return 0;
-		}
-		CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
-		CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList;
-		if (LootInProgress(pAdvLoot, pPersonalList, pSharedList))
-		{
-			return 0;
-		}
-		if (pSharedList->GetItemData(0) != -1)
-		{
-			DWORD multiplier = sizeof(LOOTITEM) * pSharedList->GetItemData(0);
-			if (PLOOTITEM pShareItem = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
+			if (iLogLoot)
 			{
-				if (iLogLoot)
+				if (PCHARINFO pChar = GetCharInfo())
 				{
 					if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
 					{
@@ -1595,56 +1655,69 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 					}
 					CreateLogEntry(szTemp);
 				}
-				if (iSpamLootInfo) 
-				{ 
-					WriteChatfSafe("%s:: SList: Setting the DistributeLootTimer to \ag%d\ax seconds", PLUGIN_CHAT_MSG, iDistributeLootDelay); 
-				}
-				pluginclock::time_point	DistributeLootTimer = pluginclock::now() + std::chrono::seconds(iDistributeLootDelay);
-				while (pluginclock::now() < DistributeLootTimer) // While loop to wait for DistributeLootDelay to time out
+			}
+			if (iSpamLootInfo)
+			{
+				WriteChatfSafe("%s:: SList: Setting the DistributeLootTimer to \ag%d\ax seconds", PLUGIN_CHAT_MSG, iDistributeLootDelay);
+			}
+			pluginclock::time_point	DistributeLootTimer = pluginclock::now() + std::chrono::seconds(iDistributeLootDelay);
+			while (pluginclock::now() < DistributeLootTimer) // While loop to wait for DistributeLootDelay to time out
+			{
+				Sleep(100);
+			}
+			if (!InGameOK() || !WinState((CXWnd*)pAdvancedLootWnd))
+			{
+				LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+				return 0;
+			}
+			if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
+			{
+				for (int nMember = 0; nMember < 72; nMember++)
 				{
-					Sleep(100);
-				}
-				if (!InGameOK() || !WinState((CXWnd*)pAdvancedLootWnd))
-				{
-					LootTimer = pluginclock::now();
-					return 0;
-				}
-				if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
-				{
-					for (int nMember = 0; nMember < 72; nMember++)
+					if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
 					{
-						if (pRaid->RaidMemberUsed[nMember]) // Ok this raid slot has a character in it 
+						if (PCHARINFO pChar = GetCharInfo())
 						{
-							if (_stricmp(pChar->Name, pRaid->RaidMember[nMember].Name)) // The character isn't me
+							if (pRaid->RaidMemberUsed[nMember]) // Ok this raid slot has a character in it 
 							{
-								if (GetSpawnByName(pRaid->RaidMember[nMember].Name)) // The character is in the zone
+								if (_stricmp(pChar->Name, pRaid->RaidMember[nMember].Name)) // The character isn't me
 								{
-									if (DistributeLoot(pRaid->RaidMember[nMember].Name, pShareItem))
+									if (GetSpawnByName(pRaid->RaidMember[nMember].Name)) // The character is in the zone
 									{
-										LootTimer = pluginclock::now();
-										return 0;
+										if (DistributeLoot(pRaid->RaidMember[nMember].Name, pShareItem, k))
+										{
+											LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+											return 0;
+										}
+
 									}
 								}
 							}
 						}
 					}
 				}
-				else // Ok so we're not in a raid, maybe we are in a group
+			}
+			else // Ok so we're not in a raid, maybe we are in a group
+			{
+				for (int nMember = 1; nMember < 6; nMember++) // Lets start at 1, since I am in position 0
 				{
-					for (int nMember = 1; nMember < 6; nMember++) // Lets start at 1, since I am in position 0
+					if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
 					{
-						if (pChar->pGroupInfo)
+						if (PCHARINFO pChar = GetCharInfo())
 						{
-							if (pChar->pGroupInfo->pMember[nMember] && pChar->pGroupInfo->pMember[nMember]->pName && !pChar->pGroupInfo->pMember[nMember]->Mercenary)
+							if (pChar->pGroupInfo)
 							{
-								if (!pChar->pGroupInfo->pMember[nMember]->Offline) // They aren't offline
+								if (pChar->pGroupInfo->pMember[nMember] && pChar->pGroupInfo->pMember[nMember]->pName && !pChar->pGroupInfo->pMember[nMember]->Mercenary)
 								{
-									if (pChar->pGroupInfo->pMember[nMember]->pSpawn)
+									if (!pChar->pGroupInfo->pMember[nMember]->Offline) // They aren't offline
 									{
-										if (DistributeLoot(pChar->pGroupInfo->pMember[nMember]->pSpawn->Name, pShareItem))
+										if (pChar->pGroupInfo->pMember[nMember]->pSpawn)
 										{
-											LootTimer = pluginclock::now();
-											return 0;
+											if (DistributeLoot(pChar->pGroupInfo->pMember[nMember]->pSpawn->Name, pShareItem, k))
+											{
+												LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+												return 0;
+											}
 										}
 									}
 								}
@@ -1652,34 +1725,39 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 						}
 					}
 				}
+			}
+			if (PCHARINFO pChar = GetCharInfo())
+			{
 				if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
 				{
-					if (iSpamLootInfo) 
-					{ 
-						WriteChatfSafe("%s:: SList: No one wanted \ag%s\ax setting to leave", PLUGIN_CHAT_MSG, pShareItem->Name); 
+					if (iSpamLootInfo)
+					{
+						WriteChatfSafe("%s:: SList: No one wanted \ag%s\ax setting to leave", PLUGIN_CHAT_MSG, pShareItem->Name);
 					}
 					if (iLogLoot)
 					{
 						sprintf_s(szTemp, "%s :: SList: Attempted to pass out %s and no one wanted, leaving it on the corpse", pChar->Name, pShareItem->Name);
 						CreateLogEntry(szTemp);
 					}
-					LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 					pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 1, pShareItem->LootDetails.m_array[0].StackCount); // Leaving the item on the corpse
+					bDistributeItemFailed = false;
 				}
 				else
 				{
-					LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 					DebugSpew("%s:: SList: After no one wanted the item, the attempt to leave on an item failed due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
-					return 0;
 				}
+			}
+			else
+			{
+				DebugSpew("%s:: SList: After no one wanted the item, the attempt to leave on an item failed due not being able to get PCHARINFO", PLUGIN_DEBUG_MSG);
 			}
 		}
 	}
-	LootTimer = pluginclock::now();
+	LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 	return 0;
 }
 
-bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem)
+bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem, LONG ItemIndex)
 {
 	bDistributeItemSucceeded = false;
 	bDistributeItemFailed = false;
@@ -1690,7 +1768,7 @@ bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem)
 	PCHARINFO pChar = GetCharInfo();
 	if (iSpamLootInfo) 
 	{ 
-		WriteChatfSafe("%s:: SList: Attempting to give \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pShareItem->Name, szName); 
+		WriteChatfSafe("%s:: SList: Attempting to give \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pShareItem->Name, szName);
 	}
 	if (iLogLoot)
 	{
@@ -1726,45 +1804,139 @@ bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem)
 	{ 
 		return true; 
 	}
-	if (pSharedList->GetItemData(0) != -1)
+	if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
 	{
-		DWORD multiplier = sizeof(LOOTITEM) * pSharedList->GetItemData(0);
-		if (PLOOTITEM pShareItemNew = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
+		if (pSharedList->GetItemData(ItemIndex) != -1)
 		{
-			if (pShareItemNew->ItemID == pShareItem->ItemID)
+			DWORD multiplier = sizeof(LOOTITEM) * pSharedList->GetItemData(ItemIndex);
+			if (PLOOTITEM pShareItemNew = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
 			{
-				if (pAdvancedLootWnd && pShareItemNew && pShareItemNew->LootDetails.m_length > 0)
+				if (pShareItemNew && pShareItemNew->LootDetails.m_length > 0)
 				{
-					bDistributeItemSucceeded = false;
-					bDistributeItemFailed = false;
-					pAdvancedLootWnd->DoSharedAdvLootAction(pShareItemNew, &CXStr(szName), 0, pShareItemNew->LootDetails.m_array[0].StackCount);
-					pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
-					while (pluginclock::now() < WhileTimer) // While loop to wait till we are done with the previous looting command
+					if (pShareItemNew->ItemID == pShareItem->ItemID)
 					{
-						if (!InGameOK() || !WinState((CXWnd*)pAdvancedLootWnd)) 
-						{ 
-							return true; 
+						bDistributeItemSucceeded = false;
+						bDistributeItemFailed = false;
+						pAdvancedLootWnd->DoSharedAdvLootAction(pShareItemNew, &CXStr(szName), 0, pShareItemNew->LootDetails.m_array[0].StackCount);
+						pluginclock::time_point	WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
+						while (pluginclock::now() < WhileTimer) // While loop to wait till we are done with the previous looting command
+						{
+							if (!InGameOK() || !WinState((CXWnd*)pAdvancedLootWnd))
+							{
+								return true;
+							}
+							if (bDistributeItemSucceeded)
+							{
+								return true;
+							}
+							if (bDistributeItemFailed)
+							{
+								return false;
+							}
+							Sleep(10);  // Sleep for 10 ms and lets check the previous conditions again
 						}
-						if (bDistributeItemSucceeded) 
-						{ 
-							return true; 
-						}
-						if (bDistributeItemFailed) 
-						{ 
-							return false; 
-						}
-						Sleep(10);  // Sleep for 10 ms and lets check the previous conditions again
 					}
-				}
-				else
-				{
-					DebugSpew("%s:: SList: Attempted to pass out an item but couldn't due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
-					return true;
+					else
+					{
+						DebugSpew("%s:: SList: Attempted to pass out an item but couldn't due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
+						return true;
+					}
 				}
 			}
 		}
 	}
 	return true;
+}
+
+bool ContinueCheckingSharedLoot(void) // Will stop looping through the shared loot list when the number of items clicked need/greed is equal or exceeds the number of free inventory slots
+{
+	int iItemSelected = 0;
+	if (PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd)
+	{
+		if (CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList)
+		{
+			for (LONG k = 0; k < pSharedList->ItemsArray.Count; k++)
+			{
+				LONG listindex = pSharedList->GetItemData(k);
+				if (listindex != -1)
+				{
+					DWORD multiplier = sizeof(LOOTITEM) * listindex;
+					if (PLOOTITEM pShareItem = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
+					{
+						if (pShareItem->Need || pShareItem->Greed) // Ok lets check to see if we have need or greed boxes check
+						{
+							iItemSelected++;
+						}
+					}
+				}
+			}
+		}
+		else
+		{
+			return false;
+		}
+	}
+	else
+	{
+		return false;
+	}
+	if (iSaveBagSlots >= AutoLootFreeInventory() - iItemSelected)
+	{
+		return false;
+	}
+	return true;
+}
+
+int AutoLootFreeInventory(void)
+{
+	int freeslots = 0;
+	if (PCHARINFO2 pChar2 = GetCharInfo2())
+	{
+		for (DWORD slot = BAG_SLOT_START; slot < NUM_INV_SLOTS; slot++)
+		{
+			if (!HasExpansion(EXPANSION_HoT) && slot > BAG_SLOT_START + 7)
+			{
+				break;
+			}
+			if (pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray && pChar2->pInventoryArray->InventoryArray[slot])
+			{
+				if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[slot])
+				{
+					if (GetItemFromContents(pItem)->Type == ITEMTYPE_PACK && (_stricmp(GetItemFromContents(pItem)->Name, szExcludedBag1) || _stricmp(GetItemFromContents(pItem)->Name, szExcludedBag2)))
+					{
+						if (!pItem->Contents.ContainedItems.pItems)
+						{
+							freeslots += GetItemFromContents(pItem)->Slots;
+						}
+						else
+						{
+							for (DWORD pslot = 0; pslot < (GetItemFromContents(pItem)->Slots); pslot++)
+							{
+								if (!pItem->GetContent(pslot))
+								{
+									freeslots++;
+								}
+							}
+						}
+					}
+				}
+				else
+				{
+					freeslots++;
+				}
+			}
+			else
+			{
+				freeslots++;
+			}
+		}
+	}
+	freeslots = freeslots - iSaveBagSlots;
+	if (freeslots < 0)
+	{
+		return 0;
+	}
+	return freeslots;
 }
 
 bool DirectoryExists(LPCTSTR lpszPath) 
@@ -1798,8 +1970,8 @@ void CreateLogEntry(PCHAR szLogEntry)
 	errno_t err = fopen_s(&fOut, szLogFileName, "at");
 	if (err) 
 	{
-		WriteChatfSafe("%s:: Couldn't open log file:", PLUGIN_CHAT_MSG);
-		WriteChatfSafe("%s:: \ar%s\ax", PLUGIN_CHAT_MSG, szLogFileName);
+		WriteChatf("%s:: Couldn't open log file:", PLUGIN_CHAT_MSG);
+		WriteChatf("%s:: \ar%s\ax", PLUGIN_CHAT_MSG, szLogFileName);
 		return;
 	}
 	char tmpbuf[128];
@@ -1862,7 +2034,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 				return;
 			}
 		}
-		WriteChatfSafe("%s:: Set %s", PLUGIN_CHAT_MSG, iUseAutoLoot ? "\agON\ax" : "\arOFF\ax");
+		WriteChatf("%s:: Set %s", PLUGIN_CHAT_MSG, iUseAutoLoot ? "\agON\ax" : "\arOFF\ax");
 	}
 	else if (!_stricmp(Parm1, "spamloot"))
 	{
@@ -1874,7 +2046,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		{
 			iSpamLootInfo = SetBOOL(iSpamLootInfo, Parm2, "Settings", "SpamLootInfo", szLootINI);
 		}
-		WriteChatfSafe("%s:: Spam looting actions %s", PLUGIN_CHAT_MSG, iSpamLootInfo ? "\agON\ax" : "\arOFF\ax");
+		WriteChatf("%s:: Spam looting actions %s", PLUGIN_CHAT_MSG, iSpamLootInfo ? "\agON\ax" : "\arOFF\ax");
 	}
 	else if (!_stricmp(Parm1, "logloot"))
 	{
@@ -1886,7 +2058,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		{
 			iLogLoot = SetBOOL(iLogLoot, Parm2, "Settings", "LogLoot", szLootINI);
 		}
-		WriteChatfSafe("%s:: Logging loot actions for master looter is %s", PLUGIN_CHAT_MSG, iLogLoot ? "\agON\ax" : "\arOFF\ax");
+		WriteChatf("%s:: Logging loot actions for master looter is %s", PLUGIN_CHAT_MSG, iLogLoot ? "\agON\ax" : "\arOFF\ax");
 	}
 	else if (!_stricmp(Parm1, "raidloot"))
 	{
@@ -1898,7 +2070,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		{
 			iRaidLoot = SetBOOL(iRaidLoot, Parm2, "Settings", "RaidLoot", szLootINI);
 		}
-		WriteChatfSafe("%s:: Raid looting is turned: %s", PLUGIN_CHAT_MSG, iRaidLoot ? "\agON\ax" : "\arOFF\ax");
+		WriteChatf("%s:: Raid looting is turned: %s", PLUGIN_CHAT_MSG, iRaidLoot ? "\agON\ax" : "\arOFF\ax");
 	}
 	else if (!_stricmp(Parm1, "barterminimum")) 
 	{
@@ -1906,11 +2078,11 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		{
 			iBarMinSellPrice = atoi(Parm2);
 			WritePrivateProfileString("Settings", "BarMinSellPrice", Parm2, szLootINI);
-			WriteChatfSafe("%s:: Stop looting when \ag%d\ax slots are left", PLUGIN_CHAT_MSG, iBarMinSellPrice);
+			WriteChatf("%s:: Stop looting when \ag%d\ax slots are left", PLUGIN_CHAT_MSG, iBarMinSellPrice);
 		}
 		else
 		{
-			WriteChatfSafe("%s:: Please send a valid number for your minimum barter price", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: Please send a valid number for your minimum barter price", PLUGIN_CHAT_MSG);
 		}
 	}
 	else if (!_stricmp(Parm1, "saveslots"))
@@ -1919,11 +2091,11 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		{
 			iSaveBagSlots = atoi(Parm2);
 			WritePrivateProfileString("Settings", "SaveBagSlots", Parm2, szLootINI);
-			WriteChatfSafe("%s:: Stop looting when \ag%d\ax slots are left", PLUGIN_CHAT_MSG, iSaveBagSlots);
+			WriteChatf("%s:: Stop looting when \ag%d\ax slots are left", PLUGIN_CHAT_MSG, iSaveBagSlots);
 		}
 		else
 		{
-			WriteChatfSafe("%s:: Please send a valid number for the number of bag slots to save", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: Please send a valid number for the number of bag slots to save", PLUGIN_CHAT_MSG);
 		}
 	}
 	else if (!_stricmp(Parm1, "distributedelay"))
@@ -1932,11 +2104,11 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		{
 			iDistributeLootDelay = atoi(Parm2);
 			WritePrivateProfileString("Settings", "DistributeLootDelay", Parm2, szLootINI);
-			WriteChatfSafe("%s:: The master looter will wait \ag%d\ax seconds before trying to distribute loot", PLUGIN_CHAT_MSG, iDistributeLootDelay);
+			WriteChatf("%s:: The master looter will wait \ag%d\ax seconds before trying to distribute loot", PLUGIN_CHAT_MSG, iDistributeLootDelay);
 		}
 		else
 		{
-			WriteChatfSafe("%s:: Please send a valid number for the distribute loot delay", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: Please send a valid number for the distribute loot delay", PLUGIN_CHAT_MSG);
 		}
 	}
 	else if (!_stricmp(Parm1, "newitemdelay"))
@@ -1945,11 +2117,11 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		{
 			iNewItemDelay = atoi(Parm2);
 			WritePrivateProfileString("Settings", "NewItemDelay", Parm2, szLootINI);
-			WriteChatfSafe("%s:: The master looter will wait \ag%d\ax seconds when a new item drops before looting that item", PLUGIN_CHAT_MSG, iNewItemDelay);
+			WriteChatf("%s:: The master looter will wait \ag%d\ax seconds when a new item drops before looting that item", PLUGIN_CHAT_MSG, iNewItemDelay);
 		}
 		else
 		{
-			WriteChatfSafe("%s:: Please send a valid number for the distribute loot delay", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: Please send a valid number for the distribute loot delay", PLUGIN_CHAT_MSG);
 		}
 	}
 	else if (!_stricmp(Parm1, "cursordelay"))
@@ -1958,11 +2130,11 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		{
 			iCursorDelay = atoi(Parm2);
 			WritePrivateProfileString("Settings", "CursorDelay", Parm2, szLootINI);
-			WriteChatfSafe("%s:: You will wait \ag%d\ax seconds before trying to autoinventory items on your cursor", PLUGIN_CHAT_MSG, iCursorDelay);
+			WriteChatf("%s:: You will wait \ag%d\ax seconds before trying to autoinventory items on your cursor", PLUGIN_CHAT_MSG, iCursorDelay);
 		}
 		else
 		{
-			WriteChatfSafe("%s:: Please send a valid number for the cursor delay", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: Please send a valid number for the cursor delay", PLUGIN_CHAT_MSG);
 		}
 	}
 	else if (!_stricmp(Parm1, "questkeep"))
@@ -1971,11 +2143,11 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		{
 			iQuestKeep = atoi(Parm2);
 			WritePrivateProfileString("Settings", "QuestKeep", Parm2, szLootINI);
-			WriteChatfSafe("%s:: Your default number to keep of new no drop items is: \ag%d\ax", PLUGIN_CHAT_MSG, iQuestKeep);
+			WriteChatf("%s:: Your default number to keep of new no drop items is: \ag%d\ax", PLUGIN_CHAT_MSG, iQuestKeep);
 		}
 		else
 		{
-			WriteChatfSafe("%s:: Please send a valid number for default number of quest items to keep", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: Please send a valid number for default number of quest items to keep", PLUGIN_CHAT_MSG);
 		}
 	}
 	else if (!_stricmp(Parm1, "nodropdefault"))
@@ -1994,11 +2166,11 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		}
 		else
 		{
-			WriteChatfSafe("%s:: \ar%s\ax is an invalid entry, please use [quest|keep|ignore]", PLUGIN_CHAT_MSG, szNoDropDefault);
+			WriteChatf("%s:: \ar%s\ax is an invalid entry, please use [quest|keep|ignore]", PLUGIN_CHAT_MSG, szNoDropDefault);
 			return;
 		}
 		WritePrivateProfileString("Settings", "NoDropDefault", szNoDropDefault, szLootINI);
-		WriteChatfSafe("%s:: Your default for new no drop items is: \ag%s\ax", PLUGIN_CHAT_MSG, szNoDropDefault);
+		WriteChatf("%s:: Your default for new no drop items is: \ag%s\ax", PLUGIN_CHAT_MSG, szNoDropDefault);
 	}
 	else if (!_stricmp(Parm1, "guilditempermission"))
 	{
@@ -2020,29 +2192,29 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		}
 		else
 		{
-			WriteChatfSafe("%s:: \ar%s\ax is an invalid entry, please use [view only|public if usable|public]", PLUGIN_CHAT_MSG, szGuildItemPermission);
+			WriteChatf("%s:: \ar%s\ax is an invalid entry, please use [view only|public if usable|public]", PLUGIN_CHAT_MSG, szGuildItemPermission);
 			return;
 		}
 		WritePrivateProfileString("Settings", "GuildItemPermission", szGuildItemPermission, szLootINI);
-		WriteChatfSafe("%s:: Your default permission for items put into your guild bank is: \ag%s\ax", PLUGIN_CHAT_MSG, szGuildItemPermission);
+		WriteChatf("%s:: Your default permission for items put into your guild bank is: \ag%s\ax", PLUGIN_CHAT_MSG, szGuildItemPermission);
 	}
 	else if (!_stricmp(Parm1, "excludedbag1"))
 	{
 		WritePrivateProfileString("Settings", "ExcludeBag1", Parm2, szLootINI);
 		sprintf_s(szExcludedBag1, "%s", Parm2);
-		WriteChatfSafe("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag1);
+		WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag1);
 	}
 	else if (!_stricmp(Parm1, "excludedbag2"))
 	{
 		WritePrivateProfileString("Settings", "ExcludeBag2", Parm2, szLootINI);
 		sprintf_s(szExcludedBag2, "%s", Parm2);
-		WriteChatfSafe("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag2);
+		WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag2);
 	}
 	else if (!_stricmp(Parm1, "lootini"))
 	{
 		sprintf_s(szLootINI, "%s\\Macros\\%s.ini", gszINIPath, Parm2);
 		WritePrivateProfileString(GetCharInfo()->Name, "lootini", szLootINI, INIFileName);
-		WriteChatfSafe("%s:: The location for your loot ini is:\n \ag%s\ax", PLUGIN_CHAT_MSG, szLootINI);
+		WriteChatf("%s:: The location for your loot ini is:\n \ag%s\ax", PLUGIN_CHAT_MSG, szLootINI);
 		SetAutoLootVariables();
 	}
 	else if (!_stricmp(Parm1, "reload"))
@@ -2075,7 +2247,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		}
 		else
 		{
-			WriteChatfSafe("%s:: Invalid buy command", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: Invalid buy command", PLUGIN_CHAT_MSG);
 		}
 	}
 	else if (!_stricmp(Parm1, "sell"))
@@ -2109,66 +2281,18 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 			}
 			else
 			{
-				WriteChatfSafe("%s:: Please target a guild/personal banker!", PLUGIN_CHAT_MSG);
+				WriteChatf("%s:: Please target a guild/personal banker!", PLUGIN_CHAT_MSG);
 			}
 		}
 		else
 		{
-			WriteChatfSafe("%s:: Please target a guild/personal banker!", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: Please target a guild/personal banker!", PLUGIN_CHAT_MSG);
 		}
 	}
 	else if (!_stricmp(Parm1, "test"))
 	{
-		WriteChatfSafe("%s:: Testing stuff, please ignore this command.  I will remove it later once plugin is done", PLUGIN_CHAT_MSG);
-		if (PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd)
-		{
-			if (CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList)
-			{
-				for (LONG k = 0; k < pSharedList->ItemsArray.Count; k++)
-				{
-					LONG listindex = pSharedList->GetItemData(k);
-					if (listindex != -1)
-					{
-						DWORD multiplier = sizeof(LOOTITEM) * listindex;
-						if (PLOOTITEM pShareItem = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
-						{
-							///*0x00*/ DWORD	ItemID;
-							///*0x04*/ CHAR	Name[0x40];
-							///*0x44*/ DWORD	IconID;
-							///*0x48*/ BYTE  IsStackable;
-							///*0x4c*/ DWORD  MaxStack;
-							///*0x50*/ BYTE   NoDrop;
-							///*0x54*/ DWORD  ComboID;
-							///*0x58*/ DWORD  LootID;
-							///*0x5c*/ eAdvLootState State;
-							///*0x60*/ BYTE	bAutoRoll;
-							///*0x61*/ BYTE	ActivelyManaged; // User has the manage Window up
-							///*0x62*/ BYTE	ContextMenu;     // item has a context menu
-							///*0x63*/ BYTE	AskRandomMode; //item is in AskRandom mode
-							///*0x64*/ BYTE   CLootInProgress;
-							///*0x65*/ BYTE   PLootInProgress;
-							///*0x6c*/ struct _LOOTDETAILS	*LootDetails;
-							///*0x78*/ DWORD	AskTimer;
-							///*0x7c*/ BYTE	AutoRoll;
-							///*0x7e*/ BYTE	Need;
-							///*0x7f*/ BYTE	Greed;
-							///*0x80*/ BYTE	No;
-							///*0x81*/ BYTE	AlwaysNeed;
-							///*0x82*/ BYTE	AlwaysGreed;
-							///*0x83*/ BYTE	Never;
-							WriteChatfSafe("%s:: \ag%s\ax has the bAutoRoll: %s", PLUGIN_CHAT_MSG, pShareItem->Name, pShareItem->bAutoRoll ? "\agTRUE\ax" : "\arFALSE\ax");
-							WriteChatfSafe("%s:: \ag%s\ax has the AskRandomMode: %s", PLUGIN_CHAT_MSG, pShareItem->Name, pShareItem->AskRandomMode ? "\agTRUE\ax" : "\arFALSE\ax");
-							WriteChatfSafe("%s:: \ag%s\ax has the AskTimer: \ag%d\ax", PLUGIN_CHAT_MSG, pShareItem->Name, pShareItem->AskTimer);
-							WriteChatfSafe("%s:: \ag%s\ax has the AutoRoll box marked: %s", PLUGIN_CHAT_MSG, pShareItem->Name, pShareItem->AutoRoll ? "\agON\ax" : "\arOFF\ax");
-							WriteChatfSafe("%s:: \ag%s\ax has the No box marked: %s", PLUGIN_CHAT_MSG, pShareItem->Name, pShareItem->No ? "\agON\ax" : "\arOFF\ax");
-							WriteChatfSafe("%s:: \ag%s\ax has the Need box marked: %s", PLUGIN_CHAT_MSG, pShareItem->Name, pShareItem->Need ? "\agON\ax" : "\arOFF\ax");
-							WriteChatfSafe("%s:: \ag%s\ax has the Greed box marked: %s", PLUGIN_CHAT_MSG, pShareItem->Name, pShareItem->Greed ? "\agON\ax" : "\arOFF\ax");
-							
-						}
-					}
-				}
-			}
-		}
+		WriteChatf("%s:: Testing stuff, please ignore this command.  I will remove it later once plugin is done", PLUGIN_CHAT_MSG);
+
 	}
 	else if (!_stricmp(Parm1, "status"))
 	{
@@ -2176,7 +2300,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	}
 	else if (!_stricmp(Parm1, "sort"))
 	{
-		sort_auto_loot(string(szLootINI), [](auto msg) {WriteChatfSafe("%s:: %s", PLUGIN_CHAT_MSG, msg.c_str()); });
+		sort_auto_loot(string(szLootINI), [](auto msg) {WriteChatf("%s:: %s", PLUGIN_CHAT_MSG, msg.c_str()); });
 	}
 	else
 	{
@@ -2259,17 +2383,17 @@ void SetItemCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 				}
 				else
 				{
-					WriteChatfSafe("%s:: There is no way this should fail as far as I know. There is an item on your cursor, but you were unable to get PCONTENTS from it.", PLUGIN_CHAT_MSG);
+					WriteChatf("%s:: There is no way this should fail as far as I know. There is an item on your cursor, but you were unable to get PCONTENTS from it.", PLUGIN_CHAT_MSG);
 				}
 			}
 			else
 			{
-				WriteChatfSafe("%s:: There is no item on your cursor, please pick up the item and resend the command", PLUGIN_CHAT_MSG);
+				WriteChatf("%s:: There is no item on your cursor, please pick up the item and resend the command", PLUGIN_CHAT_MSG);
 			}
 		}
 		else
 		{
-			WriteChatfSafe("%s:: There is no way this should fail as far as I know.  The plugin failed to get GetCharInfo2", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: There is no way this should fail as far as I know.  The plugin failed to get GetCharInfo2", PLUGIN_CHAT_MSG);
 		}
 	}
 	else
@@ -2301,41 +2425,41 @@ void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
 	if (!_stricmp(szAction, "Keep"))
 	{
 		WritePrivateProfileString(INISection, pItem->Name, "Keep", szLootINI);
-		WriteChatfSafe("%s:: Setting \ag%s\ax to \agKeep\ax", PLUGIN_CHAT_MSG, pItem->Name);
+		WriteChatf("%s:: Setting \ag%s\ax to \agKeep\ax", PLUGIN_CHAT_MSG, pItem->Name);
 	}
 	else if (!_stricmp(szAction, "Sell"))
 	{
 		WritePrivateProfileString(INISection, pItem->Name, "Sell", szLootINI);
-		WriteChatfSafe("%s:: Setting \ag%s\ax to \agSell\ax", PLUGIN_CHAT_MSG, pItem->Name);
+		WriteChatf("%s:: Setting \ag%s\ax to \agSell\ax", PLUGIN_CHAT_MSG, pItem->Name);
 	}
 	else if (!_stricmp(szAction, "Deposit"))
 	{
 		WritePrivateProfileString(INISection, pItem->Name, "Deposit", szLootINI);
-		WriteChatfSafe("%s:: Setting \ag%s\ax to \agDeposit\ax", PLUGIN_CHAT_MSG, pItem->Name);
+		WriteChatf("%s:: Setting \ag%s\ax to \agDeposit\ax", PLUGIN_CHAT_MSG, pItem->Name);
 	}
 	else if (!_stricmp(szAction, "Ignore"))
 	{
 		WritePrivateProfileString(INISection, pItem->Name, "Ignore", szLootINI);
-		WriteChatfSafe("%s:: Setting \ag%s\ax to \arIgnore\ax", PLUGIN_CHAT_MSG, pItem->Name);
+		WriteChatf("%s:: Setting \ag%s\ax to \arIgnore\ax", PLUGIN_CHAT_MSG, pItem->Name);
 	}
 	else if (!_stricmp(szAction, "Destroy"))
 	{
 		WritePrivateProfileString(INISection, pItem->Name, "Destroy", szLootINI);
-		WriteChatfSafe("%s:: Setting \ag%s\ax to \arDestroy\ax", PLUGIN_CHAT_MSG, pItem->Name);
+		WriteChatf("%s:: Setting \ag%s\ax to \arDestroy\ax", PLUGIN_CHAT_MSG, pItem->Name);
 	}
 	else if (!_stricmp(szAction, "Quest"))
 	{
 		int QuestNumber = atoi(szEntry);
 		sprintf_s(INIValue, "Quest|%d", QuestNumber);
 		WritePrivateProfileString(INISection, pItem->Name, INIValue, szLootINI);
-		WriteChatfSafe("%s:: Setting \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pItem->Name, INIValue);
+		WriteChatf("%s:: Setting \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pItem->Name, INIValue);
 	}
 	else if (!_stricmp(szAction, "Barter"))
 	{
 		int BarterNumber = atoi(szEntry);
 		sprintf_s(INIValue, "Barter|%d", BarterNumber);
 		WritePrivateProfileString(INISection, pItem->Name, INIValue, szLootINI);
-		WriteChatfSafe("%s:: Setting \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pItem->Name, INIValue);
+		WriteChatf("%s:: Setting \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pItem->Name, INIValue);
 	}
 	else if (!_stricmp(szAction, "Gear"))
 	{
@@ -2365,24 +2489,24 @@ void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
 		}
 		sprintf_s(INIValue, "%sNumberToLoot|%i|", INIValue, matching);
 		WritePrivateProfileString(INISection, pItem->Name, INIValue, szLootINI);
-		WriteChatfSafe("%s:: Setting \ag%s\ax to:", PLUGIN_CHAT_MSG, pItem->Name);
-		WriteChatfSafe("%s:: \ag%s\ax", PLUGIN_CHAT_MSG, INIValue);
+		WriteChatf("%s:: Setting \ag%s\ax to:", PLUGIN_CHAT_MSG, pItem->Name);
+		WriteChatf("%s:: \ag%s\ax", PLUGIN_CHAT_MSG, INIValue);
 	}
 	else if (!_stricmp(szAction, "Status"))
 	{
 		CHAR Value[MAX_STRING] = { 0 };
 		if (GetPrivateProfileString(INISection, pItem->Name, 0, Value, MAX_STRING, szLootINI) == 0)
 		{
-			WriteChatfSafe("%s:: \ag%s\ax is not in your loot.ini", PLUGIN_CHAT_MSG, pItem->Name);
+			WriteChatf("%s:: \ag%s\ax is not in your loot.ini", PLUGIN_CHAT_MSG, pItem->Name);
 		}
 		else
 		{
-			WriteChatfSafe("%s:: \ag%s\ax is set to \ag%s\ax", PLUGIN_CHAT_MSG, pItem->Name, Value);
+			WriteChatf("%s:: \ag%s\ax is set to \ag%s\ax", PLUGIN_CHAT_MSG, pItem->Name, Value);
 		}
 	}
 	else
 	{
-		WriteChatfSafe("%s:: Invalid command.  The accepted commands are [Quest #n|Gear|Keep|Sell|Ignore|Destroy]", PLUGIN_CHAT_MSG);
+		WriteChatf("%s:: Invalid command.  The accepted commands are [Quest #n|Gear|Keep|Sell|Ignore|Destroy]", PLUGIN_CHAT_MSG);
 	}
 
 	if (PCHARINFO2 pChar2 = GetCharInfo2())
@@ -2395,7 +2519,7 @@ void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
 				{
 					if (iSpamLootInfo) 
 					{ 
-						WriteChatfSafe("%s:: Destroying \ar%s\ax", PLUGIN_CHAT_MSG, pItem->Item2->Name); 
+						WriteChatf("%s:: Destroying \ar%s\ax", PLUGIN_CHAT_MSG, pItem->Item2->Name); 
 					}
 					DoCommand(GetCharInfo()->pSpawn, "/destroy");
 				}
@@ -2405,7 +2529,7 @@ void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
 					{
 						if (iSpamLootInfo) 
 						{ 
-							WriteChatfSafe("%s:: Putting \ag%s\ax into my inventory", PLUGIN_CHAT_MSG, pItem->Item2->Name); 
+							WriteChatf("%s:: Putting \ag%s\ax into my inventory", PLUGIN_CHAT_MSG, pItem->Item2->Name); 
 						}
 						DoCommand(GetCharInfo()->pSpawn, "/autoinventory");
 					}
@@ -2508,58 +2632,6 @@ int dataAutoLoot(char* szName, MQ2TYPEVAR &Ret)
 	return true;
 }
 
-int AutoLootFreeInventory(void)
-{
-	int freeslots = 0;
-	if (PCHARINFO2 pChar2 = GetCharInfo2())
-	{
-		for (DWORD slot = BAG_SLOT_START; slot < NUM_INV_SLOTS; slot++)
-		{
-			if (!HasExpansion(EXPANSION_HoT) && slot > BAG_SLOT_START + 7)
-			{
-				break;
-			}
-			if (pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray && pChar2->pInventoryArray->InventoryArray[slot])
-			{
-				if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[slot])
-				{
-					if (GetItemFromContents(pItem)->Type == ITEMTYPE_PACK && (_stricmp(GetItemFromContents(pItem)->Name, szExcludedBag1) || _stricmp(GetItemFromContents(pItem)->Name, szExcludedBag2)))
-					{
-						if (!pItem->Contents.ContainedItems.pItems)
-						{
-							freeslots += GetItemFromContents(pItem)->Slots;
-						}
-						else
-						{
-							for (DWORD pslot = 0; pslot < (GetItemFromContents(pItem)->Slots); pslot++)
-							{
-								if (!pItem->GetContent(pslot))
-								{
-									freeslots++;
-								}
-							}
-						}
-					}
-				}
-				else
-				{
-					freeslots++;
-				}
-			}
-			else
-			{
-				freeslots++;
-			}
-		}
-	}
-	freeslots = freeslots - iSaveBagSlots;
-	if (freeslots < 0)
-	{
-		return 0;
-	}
-	return freeslots;
-}
-
 /********************************************************************************
 ****
 **     Functions necessary for interacting with MQ2
@@ -2619,28 +2691,32 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 	{
 		return 0;
 	}
-	CHAR PassingOutLootText[MAX_STRING] = { 0 };
-	sprintf_s(PassingOutLootText, "It is either on their never list or they have selected No."); // Confirmed 02/15/2018
-	if (strstr(Line, PassingOutLootText))
+	if (WinState((CXWnd*)pAdvancedLootWnd))
 	{
-		bDistributeItemFailed = true;
-		return(0);
-	}
-	sprintf_s(PassingOutLootText, "already has"); // Confirmed 02/19/2018
-	if (strstr(Line, PassingOutLootText))
-	{
-		sprintf_s(PassingOutLootText, "and it is lore.");  // Confirmed 04/27/2017
+		CHAR PassingOutLootText[MAX_STRING] = { 0 };
+		sprintf_s(PassingOutLootText, "It is either on their never list or they have selected No."); // Confirmed 02/15/2018
 		if (strstr(Line, PassingOutLootText))
 		{
 			bDistributeItemFailed = true;
 			return(0);
 		}
-	}
-	sprintf_s(PassingOutLootText, "It has been removed from your Shared Loot List."); // Confirmed 02/15/2018
-	if (strstr(Line, PassingOutLootText))
-	{
-		bDistributeItemSucceeded = true;
-		return(0);
+		sprintf_s(PassingOutLootText, "already has"); // Confirmed 02/19/2018
+		if (strstr(Line, PassingOutLootText))
+		{
+			sprintf_s(PassingOutLootText, "and it is lore.");  // Confirmed 04/27/2017
+			if (strstr(Line, PassingOutLootText))
+			{
+				bDistributeItemFailed = true;
+				return(0);
+			}
+		}
+		sprintf_s(PassingOutLootText, "It has been removed from your Shared Loot List."); // Confirmed 02/15/2018
+		if (strstr(Line, PassingOutLootText))
+		{
+			bDistributeItemSucceeded = true;
+			//bDistributeItemFailed = false; // this shouldn't be necessary, but it may be
+			return(0);
+		}
 	}
 
 	if (WinState((CXWnd*)pMerchantWnd))
@@ -2735,7 +2811,7 @@ PLUGIN_API VOID OnPulse(VOID)
 	bool ItemOnCursor = CheckCursor(); 	//check cursor for items, and will put in inventory if it fits after CursorDelay has been exceed
 	if (pluginclock::now() < LootTimer) 
 	{ 
-		return; // Ok, LootTimer isn't  counted down yet
+		return; // Ok, LootTimer isn't counted down yet
 	}
 	if (DestroyStuff()) 
 	{			// When you loot an item marked Destroy it will set the DestroyID to that item's ID and proceed 
@@ -2748,34 +2824,39 @@ PLUGIN_API VOID OnPulse(VOID)
 	// Ok, we have done all our prechecks lets do looting things now
 	if (pRaid && pRaid->RaidMemberCount > 0 && !iRaidLoot)
 	{
-		return; // Your in a raid, turning mq2autoloot off
+		return; // Your in a raid and don't want to use mq2autoloot, turning mq2autoloot off
 	}
 	if (!WinState((CXWnd*)pAdvancedLootWnd)) 
-	{ 
+	{
+		ClearLootEntries();
 		return; 
 	}
-	PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd;
-	if (!pAdvLoot) 
+	if (PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd)
 	{ 
-		return; 
-	}
-	if (SetLootSettings()) 
-	{ 
-		return; // Turn off Auto Loot All
-	}
-	CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
-	CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList;
-	if (LootInProgress(pAdvLoot, pPersonalList, pSharedList)) 
-	{ 
-		return; 
-	}
-	if (HandlePersonalLoot(ItemOnCursor, pChar, pChar2, pAdvLoot, pPersonalList, pSharedList)) 
-	{ 
-		return; 
-	}
-	if (HandleSharedLoot(ItemOnCursor, pChar, pChar2, pAdvLoot, pPersonalList, pSharedList)) 
-	{ 
-		return; 
+		if (SetLootSettings())
+		{
+			return; // Turn off Auto Loot All
+		}
+		CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
+		CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList;
+		if (LootInProgress(pAdvLoot, pPersonalList, pSharedList))
+		{
+			return;
+		}
+		if (pPersonalList)
+		{
+			if (HandlePersonalLoot(ItemOnCursor, pChar, pChar2, pAdvLoot, pPersonalList, pSharedList))
+			{
+				return;
+			}
+		}
+		if (pSharedList)
+		{
+			if (HandleSharedLoot(ItemOnCursor, pChar, pChar2, pAdvLoot, pPersonalList, pSharedList))
+			{
+				return;
+			}
+		}
 	}
 }
 #endif
