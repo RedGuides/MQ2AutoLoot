@@ -601,6 +601,7 @@ bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, P
 								sprintf_s(szTemp, "%s :: PList: leaving %s", pChar->Name, pPersonalItem->Name);
 								CreateLogEntry(szTemp);
 							}
+							LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 							if (CXWnd *pwnd = GetAdvLootPersonalListItem(listindex, 3)) 
 							{ 
 								SendWndClick2(pwnd, "leftmouseup"); // Leave the item
@@ -2794,19 +2795,19 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 
 PLUGIN_API VOID OnPulse(VOID)
 {
-	if (!iUseAutoLoot || !InGameOK()) 
+	if (!InGameOK()) 
 	{ 
 		return; 
 	}
 	PCHARINFO pChar = GetCharInfo();
-	if (!pChar->UseAdvancedLooting) 
-	{ 
-		return; 
-	}
 	PCHARINFO2 pChar2 = GetCharInfo2();
-	if (DoThreadAction()) 
+	if (DoThreadAction())
 	{
 		return; // Do actions from threads that need to be in the pulse to stop crashing to desktop
+	}
+	if (!iUseAutoLoot || !pChar->UseAdvancedLooting) // Oh shit we aren't using advanced looting or we have turned off the plugin
+	{
+		return;
 	}
 	bool ItemOnCursor = CheckCursor(); 	//check cursor for items, and will put in inventory if it fits after CursorDelay has been exceed
 	if (pluginclock::now() < LootTimer) 
