@@ -329,9 +329,9 @@ void SellItem(PCONTENTS pItem)
 				{
 					if (PCHARINFO pChar = GetCharInfo())
 					{
-						if (pMerchantWnd->SellButton->dShow)
+						if (pMerchantWnd->SellButton->IsVisible())
 						{
-							if (pMerchantWnd->SellButton->Enabled)
+							if (pMerchantWnd->SellButton->IsEnabled())
 							{
 								SellItem(pChar->pSpawn, szCount); // This is the command from MQ2Commands.cpp
 								if (WaitForItemToBeSold(InvSlot, BagSlot))
@@ -519,7 +519,7 @@ bool CheckGuildBank(PITEMINFO pItem)
 				if (CXWnd *pWnd = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_DepositCountLabel"))
 				{
 					CHAR szDepositCountText[MAX_STRING] = { 0 };
-					GetCXStr(pWnd->WindowText, szDepositCountText, MAX_STRING);
+					GetCXStr(pWnd->CGetWindowText(), szDepositCountText, MAX_STRING);
 					CHAR *pParsedToken = NULL;
 					CHAR *pParsedValue = strtok_s(szDepositCountText, ":", &pParsedToken);
 					pParsedValue = strtok_s(NULL, ":", &pParsedToken);
@@ -632,7 +632,7 @@ bool DepositItems(PITEMINFO pItem)  //This should only be run from inside thread
 		{
 			if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_DepositButton"))
 			{
-				if (pWndButton->Enabled)
+				if (pWndButton->IsEnabled())
 				{
 					break;
 				}
@@ -646,7 +646,7 @@ bool DepositItems(PITEMINFO pItem)  //This should only be run from inside thread
 	}
 	if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_DepositButton"))
 	{
-		if (!pWndButton->Enabled)
+		if (!pWndButton->IsEnabled())
 		{
 			WriteChatf("%s:: Whoa the deposit button isn't ready, most likely you don't have the correct rights", PLUGIN_CHAT_MSG);
 			DoCommand(GetCharInfo()->pSpawn, "/autoinventory");
@@ -730,7 +730,7 @@ bool PutInGuildBank(PITEMINFO pItem)
 								{
 									if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_PromoteButton"))
 									{
-										if (pWndButton->Enabled)
+										if (pWndButton->IsEnabled())
 										{
 											break;
 										}
@@ -746,7 +746,7 @@ bool PutInGuildBank(PITEMINFO pItem)
 							if (CXWnd *pWnd = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_BankCountLabel"))
 							{
 								CHAR szBankCountText[MAX_STRING] = { 0 };
-								GetCXStr(pWnd->WindowText, szBankCountText, MAX_STRING);
+								GetCXStr(pWnd->CGetWindowText(), szBankCountText, MAX_STRING);
 								CHAR *pParsedToken = NULL;
 								CHAR *pParsedValue = strtok_s(szBankCountText, ":", &pParsedToken);
 								pParsedValue = strtok_s(NULL, ":", &pParsedToken);
@@ -755,7 +755,7 @@ bool PutInGuildBank(PITEMINFO pItem)
 								{
 									if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_PromoteButton"))
 									{
-										if (pWndButton->Enabled)
+										if (pWndButton->IsEnabled())
 										{
 											pWndLeftMouseUp = pWndButton;
 											//SendWndClick2(pWndButton, "leftmouseup");
@@ -861,7 +861,7 @@ void SetItemPermissions(PITEMINFO pItem)
 										{
 											if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_PermissionCombo"))
 											{
-												if (pWndButton->Enabled)
+												if (pWndButton->IsEnabled())
 												{
 													break; // TODO see if this works
 												}
@@ -876,7 +876,7 @@ void SetItemPermissions(PITEMINFO pItem)
 									}
 									if (CXWnd *pWndButton = FindMQ2Window("GuildBankWnd")->GetChildItem("GBANK_PermissionCombo"))
 									{
-										if (pWndButton->Enabled)
+										if (pWndButton->IsEnabled())
 										{
 											if (!_stricmp(szGuildItemPermission, "View Only"))
 											{
@@ -958,7 +958,7 @@ void BarterSearch(int nBarterItems, CHAR* pszItemName, DWORD MyBarterMinimum, CL
 				{
 					if (CXWnd *pWndButton = FindMQ2Window("BarterSearchWnd")->GetChildItem("BTRSRCH_SearchButton"))
 					{
-						if (pWndButton->Enabled)
+						if (pWndButton->IsEnabled())
 						{
 							pWndLeftMouseUp = pWndButton; 
 							//SendWndClick2(pWndButton, "leftmouseup");
@@ -994,7 +994,7 @@ void BarterSearch(int nBarterItems, CHAR* pszItemName, DWORD MyBarterMinimum, CL
 			}
 			if (CXWnd *pWndButton = FindMQ2Window("BarterSearchWnd")->GetChildItem("BTRSRCH_SearchButton"))
 			{
-				if (pWndButton->Enabled)
+				if (pWndButton->IsEnabled())
 				{
 					WhileTimer = pluginclock::now();
 				}

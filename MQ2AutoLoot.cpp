@@ -386,7 +386,7 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 	// Whenever pConfirmationDialog is fixed this change needs to be pushed the repository, currently this crashes when you try and use it
 	//if (CSidlScreenWnd *pWnd = (CSidlScreenWnd *)pConfirmationDialog)
 	{
-		if (pWnd->dShow)
+		if (pWnd->IsVisible())
 		{
 			if (CStmlWnd *Child = (CStmlWnd*)pWnd->GetChildItem("CD_TextOutput"))
 			{
@@ -448,7 +448,7 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 		{
 			if (CXWnd* pTRDW_HisName = pTradeWnd->GetChildItem("TRDW_HisName"))
 			{
-				GetCXStr(pTRDW_HisName->WindowText, szTemp, MAX_STRING - 1);
+				GetCXStr(pTRDW_HisName->CGetWindowText(), szTemp, MAX_STRING - 1);
 				if (szTemp[0] != '\0')
 				{
 					if (HandleEQBC())
@@ -508,7 +508,7 @@ bool SetLootSettings(void) // Turn off Auto Loot All
 	}
 	if (CButtonWnd *pWndButton = (CButtonWnd*)FindMQ2Window("LootSettingsWnd")->GetChildItem("LS_AutoLootAllCheckbox"))
 	{
-		if (pWndButton->bActive)
+		if (pWndButton->IsActive())
 		{
 			if (pWndButton->Checked)
 			{
@@ -532,7 +532,7 @@ bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, P
 	{
 		for (LONG k = 0; k < pPersonalList->ItemsArray.Count; k++)
 		{
-			LONG listindex = pPersonalList->GetItemData(k);
+			LONG listindex = (LONG)pPersonalList->GetItemData(k);
 			if (listindex != -1)
 			{
 				DWORD multiplier = sizeof(LOOTITEM) * listindex;
@@ -633,7 +633,7 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 		//Loop over the item array to find see if I need to set something
 		for (LONG k = 0; k < pSharedList->ItemsArray.Count; k++)
 		{
-			LONG listindex = pSharedList->GetItemData(k);
+			LONG listindex = (LONG)pSharedList->GetItemData(k);
 			if (listindex != -1)
 			{
 				DWORD multiplier = sizeof(LOOTITEM) * listindex;
@@ -767,7 +767,7 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 
 bool WinState(CXWnd *Wnd) // Returns TRUE if the specified UI window is visible
 {
-	return (Wnd && ((PCSIDLWND)Wnd)->dShow);
+	return (Wnd && ((PCSIDLWND)Wnd)->IsVisible());
 }
 
 PMQPLUGIN Plugin(char* PluginName)
@@ -1639,7 +1639,7 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 	LONG k = (LONG)pData;
 	if (pSharedList->GetItemData(k) != -1)
 	{
-		DWORD multiplier = sizeof(LOOTITEM) * pSharedList->GetItemData(k);
+		DWORD multiplier = sizeof(LOOTITEM) * (int)pSharedList->GetItemData(k);
 		if (PLOOTITEM pShareItem = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
 		{
 			if (iLogLoot)
@@ -1809,7 +1809,7 @@ bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem, LONG ItemIndex)
 	{
 		if (pSharedList->GetItemData(ItemIndex) != -1)
 		{
-			DWORD multiplier = sizeof(LOOTITEM) * pSharedList->GetItemData(ItemIndex);
+			DWORD multiplier = sizeof(LOOTITEM) * (int)pSharedList->GetItemData(ItemIndex);
 			if (PLOOTITEM pShareItemNew = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
 			{
 				if (pShareItemNew && pShareItemNew->LootDetails.m_length > 0)
@@ -1858,7 +1858,7 @@ bool ContinueCheckingSharedLoot(void) // Will stop looping through the shared lo
 		{
 			for (LONG k = 0; k < pSharedList->ItemsArray.Count; k++)
 			{
-				LONG listindex = pSharedList->GetItemData(k);
+				LONG listindex = (LONG)pSharedList->GetItemData(k);
 				if (listindex != -1)
 				{
 					DWORD multiplier = sizeof(LOOTITEM) * listindex;
@@ -2722,13 +2722,13 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 
 	if (WinState((CXWnd*)pMerchantWnd))
 	{
-		if (pMerchantWnd->pFirstChildWnd)
+		if (pMerchantWnd->GetFirstChildWnd())
 		{
-			if (pMerchantWnd->pFirstChildWnd->pNextSiblingWnd)
+			if (pMerchantWnd->GetFirstChildWnd()->GetNextSiblingWnd())
 			{
 				CHAR MerchantText[MAX_STRING] = { 0 };
 				CHAR MerchantName[MAX_STRING] = { 0 };
-				GetCXStr(pMerchantWnd->pFirstChildWnd->WindowText, MerchantName, MAX_STRING);
+				GetCXStr(pMerchantWnd->GetFirstChildWnd()->CGetWindowText(), MerchantName, MAX_STRING);
 				sprintf_s(MerchantText, "%s says, 'Hi there, %s. Just browsing?  Have you seen the ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
 				if (strstr(Line, MerchantText)) // Merchant window is populated
 				{
