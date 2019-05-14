@@ -35,7 +35,7 @@ bool PutInGuildBank(PITEMINFO pItem);
 bool DepositItems(PITEMINFO pItem);
 void SetItemPermissions(PITEMINFO pItem);
 void BarterSearch(int nBarterItems, CHAR* pzItemName, DWORD	MyBarterMinimum, CListWnd *cListInvWnd);
-int FindBarterIndex(DWORD MyBarterMinimum, CListWnd *cBuyLineListWnd);
+int FindBarterIndex(CHAR* pszItemName, DWORD MyBarterMinimum, CListWnd *cBuyLineListWnd);
 bool SelectBarterSell (int BarterMaximumIndex, CListWnd *cBuyLineListWnd);
 void SelectBarterQuantity(int BarterMaximumIndex, CHAR* pszItemName, CListWnd *cBuyLineListWnd);
 DWORD __stdcall SellItems(PVOID pData);
