@@ -1004,30 +1004,39 @@ void BarterSearch(int nBarterItems, CHAR* pszItemName, DWORD MyBarterMinimum, CL
 	}
 }
 
-int FindBarterIndex(DWORD MyBarterMinimum, CListWnd *cBuyLineListWnd)
+int FindBarterIndex(CHAR* pszItemName, DWORD MyBarterMinimum, CListWnd *cBuyLineListWnd)
 {
 	CXStr	cxstrItemPrice;
 	CHAR	szItemPrice[MAX_STRING] = { 0 };
+	CXStr	cxstrBarterItemName;
+	CHAR	szBarterItemName[MAX_STRING] = { 0 };
 	DWORD	BarterPrice = 0;
 	DWORD	BarterMaximumPrice = 0;
 	int		BarterMaximumIndex = 0;
 	for (int nBarterItems = 0; nBarterItems < cBuyLineListWnd->ItemsArray.GetLength(); nBarterItems++)
 	{
-		if (cBuyLineListWnd->GetItemText(&cxstrItemPrice, nBarterItems, 3))
+		if (cBuyLineListWnd->GetItemText(&cxstrBarterItemName, nBarterItems, 1)) // Lets get the name of the item
 		{
-			GetCXStr(cxstrItemPrice.Ptr, szItemPrice, MAX_STRING);
-			char* pch;
-			if (pch = strstr(szItemPrice, "p"))
+			GetCXStr(cxstrBarterItemName.Ptr, szBarterItemName, MAX_STRING);
+			if (!_stricmp(szBarterItemName, pszItemName)) // nice, it matches completely
 			{
-				strcpy_s(pch, 1, "\0");
-				puts(szItemPrice);
-				if (IsNumber(szItemPrice))
+				if (cBuyLineListWnd->GetItemText(&cxstrItemPrice, nBarterItems, 3)) // Lets get the price of the item
 				{
-					BarterPrice = atoi(szItemPrice);
-					if (BarterPrice > BarterMaximumPrice)
+					GetCXStr(cxstrItemPrice.Ptr, szItemPrice, MAX_STRING);
+					char* pch;
+					if (pch = strstr(szItemPrice, "p"))
 					{
-						BarterMaximumPrice = BarterPrice;
-						BarterMaximumIndex = nBarterItems;
+						strcpy_s(pch, 1, "\0");
+						puts(szItemPrice);
+						if (IsNumber(szItemPrice))
+						{
+							BarterPrice = atoi(szItemPrice);
+							if (BarterPrice > BarterMaximumPrice)
+							{
+								BarterMaximumPrice = BarterPrice;
+								BarterMaximumIndex = nBarterItems;
+							}
+						}
 					}
 				}
 			}
@@ -1876,7 +1885,7 @@ DWORD __stdcall BarterItems(PVOID pData)
 										{
 											if (cBuyLineListWnd->ItemsArray.GetLength() > 0)
 											{
-												BarterMaximumIndex = FindBarterIndex(MyBarterMinimum, cBuyLineListWnd); // Will return -1 if no appropriate sellers are found
+												BarterMaximumIndex = FindBarterIndex(szItemName, MyBarterMinimum, cBuyLineListWnd); // Will return -1 if no appropriate sellers are found
 												if (BarterMaximumIndex > -1)
 												{
 													if (SelectBarterSell(BarterMaximumIndex, cBuyLineListWnd))
