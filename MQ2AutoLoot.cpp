@@ -2814,14 +2814,14 @@ PLUGIN_API VOID OnPulse(VOID)
 	{ 
 		return; // Ok, LootTimer isn't counted down yet
 	}
+	if (CheckWindows(ItemOnCursor)) // Need to have this before the DestroyStuff() subroutine, otherwise it won't loot no drop items marked for destroy before DestroyStuffCancelTimer runs out
+	{ 
+		return; // Returns true if your attempting to accept trade requests or click the confirmation box for no drop items
+	} 
 	if (DestroyStuff()) 
 	{			// When you loot an item marked Destroy it will set the DestroyID to that item's ID and proceed 
 		return; // to pick that item from inventory and destroy before resetting DestroyID to 0
 	}
-	if (CheckWindows(ItemOnCursor)) 
-	{ 
-		return; // Returns true if your attempting to accept trade requests or click the confirmation box for no drop items
-	} 
 	// Ok, we have done all our prechecks lets do looting things now
 	if (pRaid && pRaid->RaidMemberCount > 0 && !iRaidLoot)
 	{
