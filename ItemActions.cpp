@@ -396,7 +396,7 @@ bool FitInPersonalBank(PITEMINFO pItem)
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
-					if (pItemPack->Type == ITEMTYPE_PACK && (_stricmp(pItemPack->Name, szExcludedBag1) || _stricmp(pItemPack->Name, szExcludedBag2)))
+					if (pItemPack->Type == ITEMTYPE_PACK && _stricmp(pItemPack->Name, szExcludeBag1) && _stricmp(pItemPack->Name, szExcludeBag2))
 					{
 						if (pPack->Contents.ContainedItems.pItems)
 						{
