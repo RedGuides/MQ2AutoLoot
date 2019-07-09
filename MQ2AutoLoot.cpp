@@ -39,8 +39,8 @@ int						iLogLoot = 1;
 int						iRaidLoot = 0;
 char					szNoDropDefault[MAX_STRING];
 char					szLootINI[MAX_STRING];
-char					szExcludedBag1[MAX_STRING];
-char					szExcludedBag2[MAX_STRING];
+char					szExcludeBag1[MAX_STRING];
+char					szExcludeBag2[MAX_STRING];
 char					szGuildItemPermission[MAX_STRING];
 // Variables that are used within the plugin, but not setable 
 bool					Initialized = false;
@@ -160,15 +160,15 @@ void SetAutoLootVariables(void)
 		sprintf_s(szNoDropDefault, "Quest");
 		WritePrivateProfileString("Settings", "NoDropDefault", szNoDropDefault, szLootINI);
 	}
-	if (GetPrivateProfileString("Settings", "ExcludedBag1", 0, szExcludedBag1, MAX_STRING, szLootINI) == 0)
+	if (GetPrivateProfileString("Settings", "ExcludeBag1", 0, szExcludeBag1, MAX_STRING, szLootINI) == 0)
 	{
-		sprintf_s(szExcludedBag1, "Extraplanar Trade Satchel");
-		WritePrivateProfileString("Settings", "ExcludeBag1", szExcludedBag1, szLootINI);
+		sprintf_s(szExcludeBag1, "Extraplanar Trade Satchel");
+		WritePrivateProfileString("Settings", "ExcludeBag1", szExcludeBag1, szLootINI);
 	}
-	if (GetPrivateProfileString("Settings", "ExcludedBag2", 0, szExcludedBag2, MAX_STRING, szLootINI) == 0)
+	if (GetPrivateProfileString("Settings", "ExcludeBag2", 0, szExcludeBag2, MAX_STRING, szLootINI) == 0)
 	{
-		sprintf_s(szExcludedBag2, "Extraplanar Trade Satchel");
-		WritePrivateProfileString("Settings", "ExcludeBag2", szExcludedBag2, szLootINI);
+		sprintf_s(szExcludeBag2, "Extraplanar Trade Satchel");
+		WritePrivateProfileString("Settings", "ExcludeBag2", szExcludeBag2, szLootINI);
 	}
 	if (GetPrivateProfileString("Settings", "GuildItemPermission", 0, szGuildItemPermission, MAX_STRING, szLootINI) == 0)
 	{
@@ -205,8 +205,8 @@ void ShowInfo(void) // Outputs the variable settings into your MQ2 Window
 	WriteChatf("%s:: Raid looting is turned: %s", PLUGIN_CHAT_MSG, iRaidLoot ? "\agON\ax" : "\arOFF\ax");
 	WriteChatf("%s:: Your default number to keep of new quest items is: \ag%d\ax", PLUGIN_CHAT_MSG, iQuestKeep);
 	WriteChatf("%s:: Your default for new no drop items is: \ag%s\ax", PLUGIN_CHAT_MSG, szNoDropDefault);
-	WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag1);
-	WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag2);
+	WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludeBag1);
+	WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludeBag2);
 	WriteChatf("%s:: Your default permission for items put into your guild bank is: \ag%s\ax", PLUGIN_CHAT_MSG, szGuildItemPermission);
 	WriteChatf("%s:: The location for your loot ini is:\n \ag%s\ax", PLUGIN_CHAT_MSG, szLootINI);
 }
@@ -1208,7 +1208,7 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 								}
 								else
 								{
-									if (_stricmp(pItemPack->Name, szExcludedBag1) || _stricmp(pItemPack->Name, szExcludedBag2))
+									if (_stricmp(pItemPack->Name, szExcludeBag1) && _stricmp(pItemPack->Name, szExcludeBag2))
 									{ 
 										Count++;
 									}
@@ -1217,7 +1217,7 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 						}
 						else
 						{
-							if (_stricmp(pItemPack->Name, szExcludedBag1) || _stricmp(pItemPack->Name, szExcludedBag2))
+							if (_stricmp(pItemPack->Name, szExcludeBag1) && _stricmp(pItemPack->Name, szExcludeBag2))
 							{ 
 								Count = Count + pItemPack->Slots;
 							}
@@ -1271,7 +1271,7 @@ bool FitInInventory(DWORD pdItemSize)
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
-					if (pItemPack->Type == ITEMTYPE_PACK && (_stricmp(pItemPack->Name, szExcludedBag1) || _stricmp(pItemPack->Name, szExcludedBag2)))
+					if (pItemPack->Type == ITEMTYPE_PACK && _stricmp(pItemPack->Name, szExcludeBag1) && _stricmp(pItemPack->Name, szExcludeBag2))
 					{
 						if (pPack->Contents.ContainedItems.pItems)
 						{
@@ -1903,7 +1903,7 @@ int AutoLootFreeInventory(void)
 			{
 				if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[slot])
 				{
-					if (GetItemFromContents(pItem)->Type == ITEMTYPE_PACK && (_stricmp(GetItemFromContents(pItem)->Name, szExcludedBag1) || _stricmp(GetItemFromContents(pItem)->Name, szExcludedBag2)))
+					if (GetItemFromContents(pItem)->Type == ITEMTYPE_PACK && _stricmp(GetItemFromContents(pItem)->Name, szExcludeBag1) && _stricmp(GetItemFromContents(pItem)->Name, szExcludeBag2))
 					{
 						if (!pItem->Contents.ContainedItems.pItems)
 						{
@@ -2199,17 +2199,17 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		WritePrivateProfileString("Settings", "GuildItemPermission", szGuildItemPermission, szLootINI);
 		WriteChatf("%s:: Your default permission for items put into your guild bank is: \ag%s\ax", PLUGIN_CHAT_MSG, szGuildItemPermission);
 	}
-	else if (!_stricmp(Parm1, "excludedbag1"))
+	else if (!_stricmp(Parm1, "excludebag1"))
 	{
 		WritePrivateProfileString("Settings", "ExcludeBag1", Parm2, szLootINI);
-		sprintf_s(szExcludedBag1, "%s", Parm2);
-		WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag1);
+		sprintf_s(szExcludeBag1, "%s", Parm2);
+		WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludeBag1);
 	}
-	else if (!_stricmp(Parm1, "excludedbag2"))
+	else if (!_stricmp(Parm1, "excludebag2"))
 	{
 		WritePrivateProfileString("Settings", "ExcludeBag2", Parm2, szLootINI);
-		sprintf_s(szExcludedBag2, "%s", Parm2);
-		WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludedBag2);
+		sprintf_s(szExcludeBag2, "%s", Parm2);
+		WriteChatf("%s:: Will exclude \ar%s\ax when checking for free slots", PLUGIN_CHAT_MSG, szExcludeBag2);
 	}
 	else if (!_stricmp(Parm1, "lootini"))
 	{
@@ -2323,8 +2323,8 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		WriteChatColor("/AutoLoot barterminimum #n -> The minimum price for all items to be bartered is #n");
 		WriteChatColor("/AutoLoot questkeep #n -> If nodropdefault is set to quest your new no drop items will be set to Quest|#n");
 		WriteChatColor("/AutoLoot nodropdefault [quest|keep|ignore] -> Will set new no drop items to this value");
-		WriteChatColor("/AutoLoot excludedbag1 XXX -> Will exclude bags named XXX when checking for how many slots you are free");
-		WriteChatColor("/AutoLoot excludedbag2 XXX -> Will exclude bags named XXX when checking for how many slots you are free");
+		WriteChatColor("/AutoLoot excludebag1 XXX -> Will exclude bags named XXX when checking for how many slots you are free");
+		WriteChatColor("/AutoLoot excludebag2 XXX -> Will exclude bags named XXX when checking for how many slots you are free");
 		WriteChatColor("/AutoLoot lootini FILENAME -> Will set your loot ini as FILENAME.ini in your macro folder");
 		WriteChatColor("/AutoLoot sell -> If you have targeted a merchant, it will sell all the items marked Sell in your inventory");
 		WriteChatColor("/AutoLoot deposit -> If you have your personal banker targetted it will put all items marked Keep into your bank");
@@ -2809,18 +2809,18 @@ PLUGIN_API VOID OnPulse(VOID)
 	{
 		return;
 	}
-	bool ItemOnCursor = CheckCursor(); 	//check cursor for items, and will put in inventory if it fits after CursorDelay has been exceed
+	bool ItemOnCursor = CheckCursor(); 	// Check cursor for items, and will put in inventory if it fits after CursorDelay has been exceed
+	if (CheckWindows(ItemOnCursor)) // Need to have this before the pluginclock::now() < LootTimer check, otherwise it won't loot no drop items marked for destroy before DestroyStuffCancelTimer runs out
+	{
+		return; // Returns true if your attempting to accept trade requests or click the confirmation box for no drop items
+	}
+	if (DestroyStuff()) // When you loot an item marked Destroy it will set the DestroyID to that item's ID and proceed to pick that item from inventory and destroy before resetting DestroyID to 0
+	{			
+		return;
+	}
 	if (pluginclock::now() < LootTimer) 
 	{ 
 		return; // Ok, LootTimer isn't counted down yet
-	}
-	if (CheckWindows(ItemOnCursor)) // Need to have this before the DestroyStuff() subroutine, otherwise it won't loot no drop items marked for destroy before DestroyStuffCancelTimer runs out
-	{ 
-		return; // Returns true if your attempting to accept trade requests or click the confirmation box for no drop items
-	} 
-	if (DestroyStuff()) 
-	{			// When you loot an item marked Destroy it will set the DestroyID to that item's ID and proceed 
-		return; // to pick that item from inventory and destroy before resetting DestroyID to 0
 	}
 	// Ok, we have done all our prechecks lets do looting things now
 	if (pRaid && pRaid->RaidMemberCount > 0 && !iRaidLoot)
