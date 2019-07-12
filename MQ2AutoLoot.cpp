@@ -2665,24 +2665,15 @@ PLUGIN_API VOID ShutdownPlugin()
 
 PLUGIN_API VOID SetGameState(DWORD GameState)
 {
+    Initialized = false;
 	if (!InGameOK())
 	{
 		return;
 	}
 	if (GameState == GAMESTATE_INGAME)
 	{
-		if (!Initialized)
-		{
-			SetAutoLootVariables();
-			Initialized = true;
-		}
-	}
-	else if (GameState != GAMESTATE_LOGGINGIN)
-	{
-		if (Initialized)
-		{
-			Initialized = 0;
-		}
+		SetAutoLootVariables();
+		Initialized = true;
 	}
 }
 
