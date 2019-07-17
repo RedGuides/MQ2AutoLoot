@@ -2702,12 +2702,17 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 				return(0);
 			}
 		}
-		sprintf_s(PassingOutLootText, "It has been removed from your Shared Loot List."); // Confirmed 02/15/2018
+		//sprintf_s(PassingOutLootText, "It has been removed from your Shared Loot List."); // Confirmed 02/15/2018
+		sprintf_s(PassingOutLootText, "A "); // Confirmed 07/17/2019
 		if (strstr(Line, PassingOutLootText))
 		{
-			bDistributeItemSucceeded = true;
-			//bDistributeItemFailed = false; // this shouldn't be necessary, but it may be
-			return(0);
+			sprintf_s(PassingOutLootText, " was given to "); // Confirmed 07/17/2019
+			if (strstr(Line, PassingOutLootText))
+			{
+				bDistributeItemSucceeded = true;
+				//bDistributeItemFailed = false; // this shouldn't be necessary, but it may be
+				return(0);
+			}
 		}
 	}
 
