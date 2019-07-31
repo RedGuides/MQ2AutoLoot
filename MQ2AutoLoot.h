@@ -50,7 +50,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 void InitialLootEntry(PLOOTITEM pLootItem, bool bCreateImmediately); // Create the initial loot entry for a new item or one where we don't recognize the loot action as valid
 bool DoIHaveSpace(CHAR* pszItemName, DWORD plMaxStackSize, DWORD pdStackSize, bool bSaveBagSlots);
 bool FitInInventory(DWORD pdItemSize);
-int CheckIfItemIsLoreByID(int ItemID);
+int  CheckIfItemIsLoreByID(__int64 ItemID);
 DWORD FindItemCount(CHAR* pszItemName);
 DWORD __stdcall PassOutLoot(PVOID pData); // Pass out items to the group or the raid
 bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem, LONG ItemIndex);

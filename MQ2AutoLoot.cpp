@@ -48,7 +48,7 @@ bool					CheckedAutoLootAll = false;  // used to check if Auto Loot All is check
 bool					StartCursorTimer = true;  // 
 bool					bDistributeItemSucceeded = false; // Set true when you successfully distribute an item to a raid/group member
 bool					bDistributeItemFailed = false; // Set true when you fail distribute an item to a raid/group member
-DWORD					DestroyID;
+__int64					DestroyID;
 DWORD					CursorItemID;
 map<string, string>		LootEntries; // Will be used by non-ML to make sure new loot entries are eventually added, when iNewItemDelay > 0 only the ML can add entries to loot.ini file... this can cause an issue when the ML/non-ML use different loot files
 char					szTemp[MAX_STRING];
@@ -1008,13 +1008,13 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 			pParsedValue = strtok_s(NULL, "|", &pParsedToken);
 			if (pParsedValue == NULL)
 			{
-				if (PCONTENTS pItem = FindBankItemByID(pLootItem->ItemID))
+				if (PCONTENTS pItem = FindBankItemByID((DWORD)pLootItem->ItemID))
 				{
 					WriteChatf("%s:: Found:\ag%s\ax, in my bank!", PLUGIN_CHAT_MSG, pLootItem->Name);
 					CreateLootEntry("Gear", "", GetItemFromContents(pItem));
 					return false;
 				}
-				else if (PCONTENTS pItem = FindItemByID(pLootItem->ItemID))
+				else if (PCONTENTS pItem = FindItemByID((DWORD)pLootItem->ItemID))
 				{
 					WriteChatf("%s:: Found:\ag%s\ax, in my packs!", PLUGIN_CHAT_MSG, pLootItem->Name);
 					CreateLootEntry("Gear", "", GetItemFromContents(pItem));
@@ -1305,8 +1305,9 @@ bool FitInInventory(DWORD pdItemSize)
 	return false;
 }
 
-int CheckIfItemIsLoreByID(int ItemID)
+int CheckIfItemIsLoreByID(__int64 ID)
 {
+	DWORD ItemID = (DWORD)ID;
 	if (PCONTENTS pItem = FindItemByID(ItemID))
 	{
 		return GetItemFromContents(FindItemByID(ItemID))->Lore;
