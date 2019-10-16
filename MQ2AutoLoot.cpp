@@ -1689,6 +1689,7 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 										if (DistributeLoot(pRaid->RaidMember[nMember].Name, pShareItem, k))
 										{
 											LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+											bDistributeItemFailed = false;
 											return 0;
 										}
 
@@ -1718,6 +1719,7 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 											if (DistributeLoot(pChar->pGroupInfo->pMember[nMember]->pSpawn->Name, pShareItem, k))
 											{
 												LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+												bDistributeItemFailed = false;
 												return 0;
 											}
 										}
@@ -1742,7 +1744,6 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 						CreateLogEntry(szTemp);
 					}
 					pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 1, pShareItem->LootDetails.m_array[0].StackCount); // Leaving the item on the corpse
-					bDistributeItemFailed = false;
 				}
 				else
 				{
@@ -1756,13 +1757,12 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 		}
 	}
 	LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+	bDistributeItemFailed = false;
 	return 0;
 }
 
 bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem, LONG ItemIndex)
 {
-	bDistributeItemSucceeded = false;
-	bDistributeItemFailed = false;
 	if (!InGameOK()) 
 	{ 
 		return true; 
@@ -2711,7 +2711,6 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 			if (strstr(Line, PassingOutLootText))
 			{
 				bDistributeItemSucceeded = true;
-				//bDistributeItemFailed = false; // this shouldn't be necessary, but it may be
 				return(0);
 			}
 		}
