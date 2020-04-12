@@ -29,6 +29,13 @@ extern char				szLootStuffAction[MAX_STRING];
 extern char				szLogPath[MAX_STRING];
 extern char				szLogFileName[MAX_STRING];
 
+// Variables that are used within the plugin, but not setable 
+extern HANDLE			hBarterItemsThread;
+extern HANDLE			hBuyItemThread;
+extern HANDLE			hSellItemsThread;
+extern HANDLE			hDepositPersonalBankerThread;
+extern HANDLE			hDepositGuildBankerThread;
+
 // Functions necessary for MQ2AutoLoot
 bool InGameOK(void);
 void SetAutoLootVariables(void);

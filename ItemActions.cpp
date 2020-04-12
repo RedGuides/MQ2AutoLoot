@@ -1200,6 +1200,7 @@ DWORD __stdcall SellItems(PVOID pData)
 {
 	if (!InGameOK()) 
 	{ 
+		hSellItemsThread = 0;
 		return 0; 
 	}
 	bSellActive = true;
@@ -1216,6 +1217,7 @@ DWORD __stdcall SellItems(PVOID pData)
 			{
 				WriteChatfSafe("%s:: Please target a merchant!", PLUGIN_CHAT_MSG);
 				ResetItemActions();
+				hSellItemsThread = 0;
 				return 0;
 			}
 			if (MoveToNPC(psTarget))
@@ -1229,6 +1231,7 @@ DWORD __stdcall SellItems(PVOID pData)
 						{
 							WriteChatfSafe("%s:: You aren't in the proper game state or you sent another /autoloot [buy|sell|deposit|barter] command", PLUGIN_CHAT_MSG);
 							ResetItemActions();
+							hSellItemsThread = 0;
 							return 0;
 						}
 						Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
@@ -1238,6 +1241,7 @@ DWORD __stdcall SellItems(PVOID pData)
 				{
 					WriteChatfSafe("%s:: You failed to open the merchant window!!", PLUGIN_CHAT_MSG);
 					ResetItemActions();
+					hSellItemsThread = 0;
 					return 0;
 				}
 			}
@@ -1245,6 +1249,7 @@ DWORD __stdcall SellItems(PVOID pData)
 			{
 				WriteChatfSafe("%s:: You failed to get within range of the merchant!!", PLUGIN_CHAT_MSG); // This shouldn't fail since it was checked before you entered this thread
 				ResetItemActions();
+				hSellItemsThread = 0;
 				return 0;
 			}
 		}
@@ -1252,6 +1257,7 @@ DWORD __stdcall SellItems(PVOID pData)
 		{
 			WriteChatfSafe("%s:: Please target a merchant!", PLUGIN_CHAT_MSG); // This shouldn't fail since it was checked before you entered this thread
 			ResetItemActions();
+			hSellItemsThread = 0;
 			return 0;
 		}
 	}
@@ -1295,6 +1301,7 @@ DWORD __stdcall SellItems(PVOID pData)
 									if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
 									{
 										ResetItemActions();
+										hSellItemsThread = 0;
 										return 0;
 									}
 								}
@@ -1350,6 +1357,7 @@ DWORD __stdcall SellItems(PVOID pData)
 													if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
 													{
 														ResetItemActions();
+														hSellItemsThread = 0;
 														return 0;
 													}
 												}
@@ -1365,12 +1373,17 @@ DWORD __stdcall SellItems(PVOID pData)
 		}
 	}
 	ResetItemActions();
+	hSellItemsThread = 0;
 	return 0;
 }
 
 DWORD __stdcall BuyItem(PVOID pData)
 {
-	if (!InGameOK()) return 0;
+	if (!InGameOK())
+	{
+		hBuyItemThread = 0;
+		return 0;
+	}
 	bBuyActive = true;
 	bEndThreads = false;
 	int  iItemCount;
@@ -1397,6 +1410,7 @@ DWORD __stdcall BuyItem(PVOID pData)
 			{
 				WriteChatfSafe("%s:: Please target a merchant!", PLUGIN_CHAT_MSG);
 				ResetItemActions();
+				hBuyItemThread = 0;
 				return 0;
 			}
 			if (MoveToNPC(psTarget))
@@ -1410,6 +1424,7 @@ DWORD __stdcall BuyItem(PVOID pData)
 						{
 							WriteChatfSafe("%s:: You aren't in the proper game state or you sent another /autoloot [buy|sell|deposit|barter] command", PLUGIN_CHAT_MSG);
 							ResetItemActions();
+							hBuyItemThread = 0;
 							return 0;
 						}
 						Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
@@ -1419,6 +1434,7 @@ DWORD __stdcall BuyItem(PVOID pData)
 				{
 					WriteChatfSafe("%s:: You failed to open the merchant window!!", PLUGIN_CHAT_MSG);
 					ResetItemActions();
+					hBuyItemThread = 0;
 					return 0;
 				}
 			}
@@ -1426,6 +1442,7 @@ DWORD __stdcall BuyItem(PVOID pData)
 			{
 				WriteChatfSafe("%s:: You failed to get within range of the merchant!!", PLUGIN_CHAT_MSG); // This shouldn't fail since it was checked before you entered this thread
 				ResetItemActions();
+				hBuyItemThread = 0;
 				return 0;
 			}
 		}
@@ -1433,6 +1450,7 @@ DWORD __stdcall BuyItem(PVOID pData)
 		{
 			WriteChatfSafe("%s:: Please target a merchant!", PLUGIN_CHAT_MSG); // This shouldn't fail since it was checked before you entered this thread
 			ResetItemActions();
+			hBuyItemThread = 0;
 			return 0;
 		}
 	}
@@ -1468,6 +1486,7 @@ DWORD __stdcall BuyItem(PVOID pData)
 										if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
 										{
 											ResetItemActions();
+											hBuyItemThread = 0;
 											return 0;
 										}
 										if (cLWnd->GetCurSel() != nMerchantItems)
@@ -1480,6 +1499,7 @@ DWORD __stdcall BuyItem(PVOID pData)
 											if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
 											{
 												ResetItemActions();
+												hBuyItemThread = 0;
 												return 0;
 											}
 											if (cLWnd->GetCurSel() == nMerchantItems)
@@ -1491,6 +1511,7 @@ DWORD __stdcall BuyItem(PVOID pData)
 										if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd) || cLWnd->GetCurSel() != nMerchantItems)
 										{
 											ResetItemActions();
+											hBuyItemThread = 0;
 											return 0;
 										}
 										DWORD iStartCount = FindItemCount(szItemToBuy);
@@ -1504,6 +1525,7 @@ DWORD __stdcall BuyItem(PVOID pData)
 												if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pMerchantWnd))
 												{
 													ResetItemActions();
+													hBuyItemThread = 0;
 													return 0;
 												}
 												if (FindItemCount(szItemToBuy) > iStartCount)
@@ -1531,12 +1553,17 @@ DWORD __stdcall BuyItem(PVOID pData)
 		WriteChatfSafe("%s:: Please open a merchant window first before attempting to buy: \ag%s\ax", PLUGIN_CHAT_MSG, szItemToBuy);
 	}
 	ResetItemActions();
+	hBuyItemThread = 0;
 	return 0;
 }
 
 DWORD __stdcall DepositPersonalBanker(PVOID pData)
 {
-	if (!InGameOK()) return 0;
+	if (!InGameOK())
+	{
+		hDepositPersonalBankerThread = 0;
+		return 0;
+	}
 	bEndThreads = false;
 	bDepositActive = true;
 	PCHARINFO pChar = GetCharInfo();
@@ -1551,6 +1578,7 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 			{
 				WriteChatfSafe("%s:: Please target a personal banker!", PLUGIN_CHAT_MSG);
 				ResetItemActions();
+				hDepositPersonalBankerThread = 0;
 				return 0;
 			}
 			if (MoveToNPC(psTarget))
@@ -1564,6 +1592,7 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 						{
 							WriteChatfSafe("%s:: You aren't in the proper game state or you sent another /autoloot [buy|sell|deposit|barter] command", PLUGIN_CHAT_MSG);
 							ResetItemActions();
+							hDepositPersonalBankerThread = 0;
 							return 0;
 						}
 						Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
@@ -1573,6 +1602,7 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 				{
 					WriteChatfSafe("%s:: You failed to open your personal bank window!!", PLUGIN_CHAT_MSG);
 					ResetItemActions();
+					hDepositPersonalBankerThread = 0;
 					return 0;
 				}
 			}
@@ -1580,6 +1610,7 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 			{
 				WriteChatfSafe("%s:: You failed to get within range of your personal banker!!", PLUGIN_CHAT_MSG);
 				ResetItemActions();
+				hDepositPersonalBankerThread = 0;
 				return 0;
 			}
 		}
@@ -1587,12 +1618,14 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 		{
 			WriteChatfSafe("%s:: Please target a personal banker!", PLUGIN_CHAT_MSG); // This shouldn't fail since it was checked before you entered this thread
 			ResetItemActions();
+			hDepositPersonalBankerThread = 0;
 			return 0;
 		}
 	}
 	if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pBankWnd))  // If we aren't in a proper game state, or if they sent /autoloot deposit again we want to bug out
 	{
 		ResetItemActions();
+		hDepositPersonalBankerThread = 0;
 		return 0;
 	}
 	HideDoCommand(GetCharInfo()->pSpawn, "/keypress OPEN_INV_BAGS",true); // TODO check if this is necessary
@@ -1612,6 +1645,7 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 					if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pBankWnd))
 					{
 						ResetItemActions();
+						hDepositPersonalBankerThread = 0;
 						return 0;
 					}
 				}
@@ -1621,6 +1655,7 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 	if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pBankWnd))  // This shouldn't be necessary
 	{
 		ResetItemActions();
+		hDepositPersonalBankerThread = 0;
 		return 0;
 	}
 	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
@@ -1646,6 +1681,7 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 									if (!InGameOK() || bEndThreads || !WinState((CXWnd*)pBankWnd))
 									{
 										ResetItemActions();
+										hDepositPersonalBankerThread = 0;
 										return 0;
 									}
 								}
@@ -1657,12 +1693,17 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 		}
 	}
 	ResetItemActions();
+	hDepositPersonalBankerThread = 0;
 	return 0;
 }
 
 DWORD __stdcall DepositGuildBanker(PVOID pData)
 {
-	if (!InGameOK()) return 0;
+	if (!InGameOK())
+	{
+		hDepositGuildBankerThread = 0;
+		return 0;
+	}
 	bEndThreads = false;
 	bDepositActive = true;
 	PCHARINFO pChar = GetCharInfo();
@@ -1677,6 +1718,7 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 			{
 				WriteChatfSafe("%s:: Please target a guild banker!", PLUGIN_CHAT_MSG);
 				ResetItemActions();
+				hDepositGuildBankerThread = 0;
 				return 0;
 			}
 			if (MoveToNPC(psTarget))
@@ -1690,6 +1732,7 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 						{
 							WriteChatfSafe("%s:: You aren't in the proper game state or you sent another /autoloot [buy|sell|deposit|barter] command");
 							ResetItemActions();
+							hDepositGuildBankerThread = 0;
 							return 0;
 						}
 						Sleep(100);  // Sleep for 100 ms and lets check the previous conditions again
@@ -1699,6 +1742,7 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 				{
 					WriteChatfSafe("%s:: You failed to open your guild bank window!!", PLUGIN_CHAT_MSG); 
 					ResetItemActions();
+					hDepositGuildBankerThread = 0;
 					return 0;
 				}
 			}
@@ -1706,6 +1750,7 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 			{
 				WriteChatfSafe("%s:: You failed to get within range of your guild banker!!", PLUGIN_CHAT_MSG);
 				ResetItemActions();
+				hDepositGuildBankerThread = 0;
 				return 0;
 			}
 		}
@@ -1713,12 +1758,14 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 		{
 			WriteChatfSafe("%s:: Please target a guild banker!", PLUGIN_CHAT_MSG); // This shouldn't fail since it was checked before you entered this thread
 			ResetItemActions();
+			hDepositGuildBankerThread = 0;
 			return 0;
 		}
 	}
 	if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))  // If we aren't in a proper game state, or if they sent /autoloot deposit again we want to bug out
 	{
 		ResetItemActions();
+		hDepositGuildBankerThread = 0;
 		return 0;
 	}
 	HideDoCommand(GetCharInfo()->pSpawn, "/keypress OPEN_INV_BAGS",true); // TODO check if this is necessary
@@ -1744,6 +1791,7 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 					if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
 					{
 						ResetItemActions();
+						hDepositGuildBankerThread = 0;
 						return 0;
 					}
 				}
@@ -1753,6 +1801,7 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 	if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))  // This shouldn't be necessary
 	{
 		ResetItemActions();
+		hDepositGuildBankerThread = 0;
 		return 0;
 	}
 	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
@@ -1784,6 +1833,7 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 									if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")))
 									{
 										ResetItemActions();
+										hDepositGuildBankerThread = 0;
 										return 0;
 									}
 								}
@@ -1795,6 +1845,7 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 		}
 	}	
 	ResetItemActions();
+	hDepositGuildBankerThread = 0;
 	return 0;
 }
 
@@ -1802,11 +1853,13 @@ DWORD __stdcall BarterItems(PVOID pData)
 {
 	if (!InGameOK()) 
 	{ 
+		hBarterItemsThread = 0;
 		return 0; 
 	}
 	if (!HasExpansion(EXPANSION_RoF))
 	{
 		WriteChatfSafe("%s:: You need to have Rain of Fear expansion to use the barter functionality.", PLUGIN_CHAT_MSG);
+		hBarterItemsThread = 0;
 		return 0;
 	}
 	bBarterActive = true;
@@ -1827,6 +1880,7 @@ DWORD __stdcall BarterItems(PVOID pData)
 			if (!InGameOK() || bEndThreads) // If we aren't in a proper game state, or if they sent /autoloot deposit we want to bug out
 			{
 				ResetItemActions();
+				hBarterItemsThread = 0;
 				return 0;
 			}
 			if (WinState((CXWnd*)FindMQ2Window("BarterSearchWnd"))) 
@@ -1844,6 +1898,7 @@ DWORD __stdcall BarterItems(PVOID pData)
 				if (!InGameOK() || bEndThreads) // If we aren't in a proper game state, or if they sent /autoloot barter we want to bug out
 				{
 					ResetItemActions();
+					hBarterItemsThread = 0;
 					return 0;
 				}
 				CXStr	cxstrItemName;
@@ -1880,6 +1935,7 @@ DWORD __stdcall BarterItems(PVOID pData)
 									if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("BarterSearchWnd"))) // If we aren't in a proper game state, or if they sent /autoloot barter we want to bug out
 									{
 										ResetItemActions();
+										hBarterItemsThread = 0;
 										return 0;
 									}
 									if (bBarterReset)
@@ -1888,6 +1944,7 @@ DWORD __stdcall BarterItems(PVOID pData)
 										if (!InGameOK() || bEndThreads || !WinState((CXWnd*)FindMQ2Window("BarterSearchWnd"))) // If we aren't in a proper game state, or if they sent /autoloot barter we want to bug out
 										{
 											ResetItemActions();
+											hBarterItemsThread = 0;
 											return 0;
 										}
 									}
@@ -1933,6 +1990,7 @@ DWORD __stdcall BarterItems(PVOID pData)
 		}
 	}
 	ResetItemActions();
+	hBarterItemsThread = 0;
 	return 0;
 }
 #endif
