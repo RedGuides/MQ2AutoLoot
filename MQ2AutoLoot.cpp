@@ -2753,109 +2753,75 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 	{
 		return 0;
 	}
+
 	if (WinState((CXWnd*)pAdvancedLootWnd))
 	{
-		CHAR PassingOutLootText[MAX_STRING] = { 0 };
-		sprintf_s(PassingOutLootText, "It is either on their never list or they have selected No."); // Confirmed 02/15/2018
-		if (strstr(Line, PassingOutLootText))
+		if (strstr(Line, "It is either on their never list or they have selected No."))
 		{
 			bDistributeItemFailed = true;
-			return(0);
+			return 0;
 		}
-		sprintf_s(PassingOutLootText, "already has"); // Confirmed 02/19/2018
-		if (strstr(Line, PassingOutLootText))
+		if (strstr(Line, "already has") && strstr(Line, "and it is lore."))
 		{
-			sprintf_s(PassingOutLootText, "and it is lore.");  // Confirmed 04/27/2017
-			if (strstr(Line, PassingOutLootText))
-			{
-				bDistributeItemFailed = true;
-				return(0);
-			}
+			bDistributeItemFailed = true;
+			return 0;
 		}
-		//sprintf_s(PassingOutLootText, "It has been removed from your Shared Loot List."); // Confirmed 02/15/2018
-		sprintf_s(PassingOutLootText, "A "); // Confirmed 07/17/2019
-		if (strstr(Line, PassingOutLootText))
+		if (strstr(Line, "A ") && strstr(Line, " was given to "))
 		{
-			sprintf_s(PassingOutLootText, " was given to "); // Confirmed 07/17/2019
-			if (strstr(Line, PassingOutLootText))
-			{
-				bDistributeItemSucceeded = true;
-				return(0);
-			}
+			bDistributeItemSucceeded = true;
+			return 0;
 		}
 	}
 
-	if (WinState((CXWnd*)pMerchantWnd))
+	if (WinState((CXWnd*)pMerchantWnd) && pMerchantWnd->GetFirstChildWnd() && pMerchantWnd->GetFirstChildWnd()->GetNextSiblingWnd())
 	{
-		if (pMerchantWnd->GetFirstChildWnd())
+		CHAR MerchantText[MAX_STRING] = { 0 };
+		CHAR MerchantName[MAX_STRING] = { 0 };
+		GetCXStr(pMerchantWnd->GetFirstChildWnd()->CGetWindowText(), MerchantName, MAX_STRING);
+		sprintf_s(MerchantText, "%s says, 'Hi there, %s. Just browsing?  Have you seen the ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
+		if (strstr(Line, MerchantText)) // Merchant window is populated
 		{
-			if (pMerchantWnd->GetFirstChildWnd()->GetNextSiblingWnd())
-			{
-				CHAR MerchantText[MAX_STRING] = { 0 };
-				CHAR MerchantName[MAX_STRING] = { 0 };
-				GetCXStr(pMerchantWnd->GetFirstChildWnd()->CGetWindowText(), MerchantName, MAX_STRING);
-				sprintf_s(MerchantText, "%s says, 'Hi there, %s. Just browsing?  Have you seen the ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
-				if (strstr(Line, MerchantText)) // Merchant window is populated
-				{
-					LootThreadTimer = pluginclock::now();
-					return(0);
-				}
-				sprintf_s(MerchantText, "%s says, 'Welcome to my shop, %s. You would probably find a ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
-				if (strstr(Line, MerchantText)) // Merchant window is populated
-				{
-					LootThreadTimer = pluginclock::now();
-					return(0);
-				}
-				sprintf_s(MerchantText, "%s says, 'Hello there, %s. How about a nice ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
-				if (strstr(Line, MerchantText)) // Merchant window is populated
-				{
-					LootThreadTimer = pluginclock::now();
-					return(0);
-				}
-				sprintf_s(MerchantText, "%s says, 'Greetings, %s. You look like you could use a ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
-				if (strstr(Line, MerchantText)) // Merchant window is populated
-				{
-					LootThreadTimer = pluginclock::now();
-					return(0);
-				}
-			}
+			LootThreadTimer = pluginclock::now();
+			return 0;
+		}
+		sprintf_s(MerchantText, "%s says, 'Welcome to my shop, %s. You would probably find a ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
+		if (strstr(Line, MerchantText)) // Merchant window is populated
+		{
+			LootThreadTimer = pluginclock::now();
+			return 0;
+		}
+		sprintf_s(MerchantText, "%s says, 'Hello there, %s. How about a nice ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
+		if (strstr(Line, MerchantText)) // Merchant window is populated
+		{
+			LootThreadTimer = pluginclock::now();
+			return 0;
+		}
+		sprintf_s(MerchantText, "%s says, 'Greetings, %s. You look like you could use a ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
+		if (strstr(Line, MerchantText)) // Merchant window is populated
+		{
+			LootThreadTimer = pluginclock::now();
+			return 0;
 		}
 	}
 
-	CHAR BankerText[MAX_STRING] = { 0 };
-	sprintf_s(BankerText, "tells you, 'Welcome to my bank!"); // Confirmed 04/21/2017
-	if (strstr(Line, BankerText)) // Banker window is populated
+	if (strstr(Line, "tells you, 'Welcome to my bank!")) // Banker window is populated
 	{
 		LootThreadTimer = pluginclock::now() + std::chrono::milliseconds(2000); // TODO determine what is an appropriate delay
-		return(0);
 	}
-
-	if (WinState((CXWnd*)FindMQ2Window("BarterSearchWnd")))
+	else if (WinState((CXWnd*)FindMQ2Window("BarterSearchWnd")))
 	{
-		CHAR BarterText[MAX_STRING] = { 0 };
-		sprintf_s(BarterText, "You've sold ");  // Confirmed 04/27/2017
-		if (strstr(Line, BarterText))
+		if (strstr(Line, "You've sold ") && strstr(Line, " to ") && strstr(Line, "."))
 		{
-			sprintf_s(BarterText, " to ");  // Confirmed 04/27/2017
-			if (PCHAR pItemStart = strstr(Line, BarterText))
-			{
-				sprintf_s(BarterText, ".");  // Confirmed 04/27/2017
-				if (PCHAR pItemEnd = strstr(Line, BarterText))
-				{
-					bBarterItemSold = true;
-					return(0);
-				}
-			}
+			bBarterItemSold = true;
 		}
-		sprintf_s(BarterText, "Your transaction failed because your barter data is out of date.");  // Taken from HoosierBilly, has not beem checked
-		if (strstr(Line, BarterText)) //Need to research to refresh the barter search window
+		// Taken from HoosierBilly, has not beem checked
+		else if (strstr(Line, "Your transaction failed because your barter data is out of date.")) //Need to research to refresh the barter search window
 		{
 			bBarterReset = true;
-			return(0);
 		}
 	}
 
-	return(0);
+	return 0;
 }
 
 PLUGIN_API VOID OnPulse()
