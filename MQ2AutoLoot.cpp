@@ -388,7 +388,7 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 			{
 				char ConfirmationText[MAX_STRING];
 				GetCXStr(Child->STMLText, ConfirmationText, sizeof(ConfirmationText));
-				if (strstr(ConfirmationText, "is a NO DROP item, are you sure you wish to loot it?"))
+				if (strstr(ConfirmationText, "are you sure you wish to loot it?"))
 				{
 					if (WinState((CXWnd*)pLootWnd))
 					{
