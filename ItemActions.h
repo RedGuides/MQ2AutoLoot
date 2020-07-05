@@ -14,7 +14,7 @@ extern bool                         bBuyActive;
 extern bool                         bBarterReset; // Set to true when you need to refresh your barter search
 extern bool                         bBarterItemSold; // Set to true when you sell an item
 extern bool                         bEndThreads; // Set to true when you want to end any threads out there, also it is used to enforce that at most a single thread is active at one time
-extern PCONTENTS                    pItemToPickUp;
+extern CONTENTS*                    pItemToPickUp;
 extern CXWnd*                       pWndLeftMouseUp;
 extern pluginclock::time_point      LootThreadTimer;
 
@@ -24,9 +24,9 @@ bool MoveToNPC(PSPAWNINFO pSpawn);
 bool HandleMoveUtils();  // Used to connect to MQ2MoveUtils
 bool OpenWindow(PSPAWNINFO pSpawn);
 bool CheckIfItemIsInSlot(short InvSlot, short BagSlot);
-bool WaitForItemToBeSelected(PCONTENTS pItem, short InvSlot, short BagSlot);
+bool WaitForItemToBeSelected(CONTENTS* pItem, short InvSlot, short BagSlot);
 bool WaitForItemToBeSold(short InvSlot, short BagSlot);
-void SellItem(PCONTENTS pItem);
+void SellItem(CONTENTS* pItem);
 bool FitInPersonalBank(PITEMINFO pItem);
 void PutInPersonalBank(PITEMINFO pItem);
 bool CheckGuildBank(PITEMINFO pItem);
@@ -36,7 +36,7 @@ void SetItemPermissions(PITEMINFO pItem);
 void BarterSearch(int nBarterItems, const char* pszItemName, DWORD MyBarterMinimum, CListWnd *cListInvWnd);
 int FindBarterIndex(const char* pszItemName, DWORD MyBarterMinimum, CListWnd *cBuyLineListWnd);
 bool SelectBarterSell (int BarterMaximumIndex, CListWnd *cBuyLineListWnd);
-void SelectBarterQuantity(int BarterMaximumIndex, CHAR* pszItemName, CListWnd *cBuyLineListWnd);
+void SelectBarterQuantity(int BarterMaximumIndex, const char* pszItemName, CListWnd *cBuyLineListWnd);
 DWORD __stdcall SellItems(PVOID pData);
 DWORD __stdcall BuyItem(PVOID pData);
 DWORD __stdcall DepositPersonalBanker(PVOID pData);

@@ -4,7 +4,7 @@
 // PLUGIN_API is only to be used for callbacks.  All existing callbacks at this time
 // are shown below. Remove the ones your plugin does not use.  Always use Initialize
 // and Shutdown for setup and cleanup, do NOT do it in DllMain.
-#include "../MQ2Plugin.h"
+#include <mq/Plugin.h>
 
 #if !defined(ROF2EMU) && !defined(UFEMU)
 #include "../MQ2AutoLootSort/LootSort.h"
@@ -15,7 +15,8 @@ PreSetup("MQ2AutoLoot");
 PLUGIN_VERSION(1.12);
 
 //MQ2EQBC shit
-bool(*fAreTheyConnected)(char* szName);
+typedef bool (*fAreTheyConnected)(const char* szName);
+fAreTheyConnected EQBC_AreTheyConnected;
 
 // Variables that are setable through the /AutoLoot command
 int                     iUseAutoLoot = 1;
@@ -65,17 +66,17 @@ pluginclock::time_point DestroyStuffCancelTimer = pluginclock::now();
 
 bool InGameOK() // Returns TRUE if character is in game and has valid character data structures
 {
-	return(GetGameState() == GAMESTATE_INGAME && GetCharInfo() && GetCharInfo()->pSpawn && GetCharInfo()->pSpawn->StandState != STANDSTATE_DEAD && GetCharInfo2());
+	return(GetGameState() == GAMESTATE_INGAME && GetCharInfo() && GetCharInfo()->pSpawn && GetCharInfo()->pSpawn->StandState != STANDSTATE_DEAD && GetPcProfile());
 }
 
 void SetAutoLootVariables()
 {
-	sprintf_s(szLogPath, "%s\\", gszLogPath);
+	sprintf_s(szLogPath, "%s\\", gPathLogs);
 	sprintf_s(szLogFileName, "%sLoot_Log.log", szLogPath);
 	iUseAutoLoot = GetPrivateProfileInt(GetCharInfo()->Name, "UseAutoLoot", 1, INIFileName);
 	if (GetPrivateProfileString(GetCharInfo()->Name, "lootini", nullptr, szLootINI, MAX_STRING, INIFileName) == 0)
 	{
-		sprintf_s(szLootINI, "%s\\Macros\\Loot.ini", gszINIPath);  // Default location is in your \macros\loot.ini
+		sprintf_s(szLootINI, "%s\\Loot.ini", gPathConfig);
 		WritePrivateProfileString(GetCharInfo()->Name, "lootini", szLootINI, INIFileName);
 	}
 	float fVersion;
@@ -246,12 +247,12 @@ bool DoThreadAction() // Do actions from threads that need to be in the pulse to
 
 bool CheckCursor()  // Returns true if an item is on your cursor
 {
-	PCHARINFO2 pChar2 = GetCharInfo2();
+	auto pChar2 = GetPcProfile();
 	if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
 	{
 		if (PITEMINFO pItem = GetItemFromContents(pChar2->pInventoryArray->Inventory.Cursor))
 		{
-			if (!WinState((CXWnd*)pTradeWnd) && !WinState((CXWnd*)pGiveWnd) && !WinState((CXWnd*)pMerchantWnd) && !WinState((CXWnd*)pBankWnd) && !WinState((CXWnd*)FindMQ2Window("GuildBankWnd")) && !WinState((CXWnd*)FindMQ2Window("TradeskillWnd")))
+			if (!WinState(pTradeWnd) && !WinState(pGiveWnd) && !WinState(pMerchantWnd) && !WinState(pBankWnd) && !WinState(FindMQ2Window("GuildBankWnd")) && !WinState(FindMQ2Window("TradeskillWnd")))
 			{
 				if (StartCursorTimer)  // Going to set CursorItemID and CursorTimer
 				{
@@ -302,7 +303,7 @@ bool DestroyStuff()
 		return false;
 	}
 	PCHARINFO pChar = GetCharInfo();
-	PCHARINFO2 pChar2 = GetCharInfo2();
+	auto pChar2 = GetPcProfile();
 	if (pluginclock::now() > DestroyStuffCancelTimer)
 	{
 		if (iSpamLootInfo)
@@ -334,7 +335,7 @@ bool DestroyStuff()
 	{
 		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++)
 		{
-			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
 			{
 				if (pItem->ID == DestroyID)
 				{
@@ -349,7 +350,7 @@ bool DestroyStuff()
 	{
 		for (unsigned long nPack = 0; nPack < 10; nPack++)
 		{
-			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
@@ -357,7 +358,7 @@ bool DestroyStuff()
 					{
 						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
 						{
-							if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+							if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
 							{
 								if (pItem->ID == DestroyID)
 								{
@@ -386,20 +387,18 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 		{
 			if (CStmlWnd *Child = (CStmlWnd*)pWnd->GetChildItem("CD_TextOutput"))
 			{
-				char ConfirmationText[MAX_STRING];
-				GetCXStr(Child->STMLText, ConfirmationText, sizeof(ConfirmationText));
-				if (strstr(ConfirmationText, "are you sure you wish to loot it?"))
+				std::string_view ConfirmationText{ Child->STMLText };
+				if (ConfirmationText.find("are you sure you wish to loot it?") != std::string_view::npos)
 				{
-					if (WinState((CXWnd*)pLootWnd))
+					if (WinState(pLootWnd))
 					{
-						PEQLOOTWINDOW pLoot = (PEQLOOTWINDOW)pLootWnd;
-						for (int nLootSlots = 0; nLootSlots < (int)pLoot->NumOfSlots; nLootSlots++)
+						for (int nLootSlots = 0; nLootSlots < (int)pLootWnd->NumOfSlots; nLootSlots++)
 						{
-							if (PCONTENTS pContents = pLoot->pInventoryArray->InventoryArray[nLootSlots])
+							if (CONTENTS* pContents = pLootWnd->pInventoryArray->InventoryArray[nLootSlots])
 							{
 								if (PITEMINFO pItem = GetItemFromContents(pContents))
 								{
-									if (strstr(ConfirmationText, pItem->Name))
+									if (ConfirmationText.find(pItem->Name) != std::string_view::npos)
 									{
 										if (!CheckIfItemIsLoreByID(pContents->ID))
 										{
@@ -438,18 +437,18 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 		}
 	}
 
-	if (PEQTRADEWINDOW pTrade = (PEQTRADEWINDOW)pTradeWnd)
+	if (pTradeWnd)
 	{
-		if (pTrade->HisTradeReady && !pTrade->MyTradeReady && !ItemOnCursor)
+		if (pTradeWnd->bHisReadyTrade && !pTradeWnd->bMyReadyTrade && !ItemOnCursor)
 		{
 			if (CXWnd* pTRDW_HisName = pTradeWnd->GetChildItem("TRDW_HisName"))
 			{
-				GetCXStr(pTRDW_HisName->CGetWindowText(), szTemp, MAX_STRING - 1);
-				if (szTemp[0] != '\0')
+				auto hisName = pTRDW_HisName->GetWindowText();
+				if (!hisName.empty())
 				{
 					if (HandleEQBC())
 					{
-						if (fAreTheyConnected(szTemp))
+						if (fAreTheyConnected(hisName.c_str()))
 						{
 							if (CXWnd *pWndButton = pTradeWnd->GetChildItem("TRDW_Trade_Button"))
 							{
@@ -493,7 +492,7 @@ bool SetLootSettings() // Turn off Auto Loot All
 	{
 		return false;
 	}
-	if (!WinState((CXWnd*)FindMQ2Window("LootSettingsWnd")))
+	if (!WinState(FindMQ2Window("LootSettingsWnd")))
 	{
 		if (CXWnd *pWndButton = pAdvancedLootWnd->GetChildItem("ADLW_LootSettingsBtn"))
 		{
@@ -506,7 +505,7 @@ bool SetLootSettings() // Turn off Auto Loot All
 	{
 		if (pWndButton->IsActive())
 		{
-			if (pWndButton->Checked)
+			if (pWndButton->bChecked)
 			{
 				SendWndClick2(pWndButton, "leftmouseup");
 				LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
@@ -522,7 +521,7 @@ bool SetLootSettings() // Turn off Auto Loot All
 	return false;
 }
 
-bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQADVLOOTWND pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList) // Handle items in your personal loot window
+bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PcProfile* pChar2, CAdvancedLootWnd* pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList) // Handle items in your personal loot window
 {
 	if (pAdvLoot->pPLootList)
 	{
@@ -531,8 +530,7 @@ bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, P
 			LONG listindex = (LONG)pPersonalList->GetItemData(k);
 			if (listindex != -1)
 			{
-				DWORD multiplier = sizeof(LOOTITEM) * listindex;
-				if (PLOOTITEM pPersonalItem = (PLOOTITEM)(((DWORD)pAdvLoot->pPLootList->pLootItem) + multiplier))
+				if (auto pPersonalItem = &pAdvLoot->pPLootList->Items[listindex])
 				{
 					bool IWant = false;  // Will be set true if you want and can accept the item
 					bool CheckIfOthersWant = false;  // Will be set true if I am ML and I can't accept or don't need
@@ -617,7 +615,7 @@ bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, P
 	return false;
 }
 
-bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQADVLOOTWND pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList) // Handle items in your shared loot window
+bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PcProfile* pChar2, CAdvancedLootWnd* pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList) // Handle items in your shared loot window
 {
 	if (pSharedList)
 	{
@@ -632,10 +630,9 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 			LONG listindex = (LONG)pSharedList->GetItemData(k);
 			if (listindex != -1)
 			{
-				DWORD multiplier = sizeof(LOOTITEM) * listindex;
-				if (PLOOTITEM pShareItem = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
+				if (auto pShareItem = &pAdvLoot->pCLootList->Items[listindex])
 				{
-					if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
+					if (pAdvancedLootWnd && pShareItem && !pShareItem->LootDetails.IsEmpty())
 					{
 						if (!pShareItem->AutoRoll && !pShareItem->No && !pShareItem->Need && !pShareItem->Greed)
 						{ // Ok lets check to see if we have any of the boxes check
@@ -684,7 +681,7 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 											}
 											bDistributeItemFailed = false; // This is needed to check if I have the item in parcels and it is lore due to that information being kept server side
 											DebugSpew("Using pAdvancedLootWnd->DoSharedAdvLootAction(....) to loot the item on the corpse");
-											pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 0, pShareItem->LootDetails.m_array[0].StackCount);
+											pAdvancedLootWnd->DoSharedAdvLootAction(*pShareItem, pChar->Name, 0, pShareItem->LootDetails[0].StackCount);
 										}
 										else
 										{
@@ -700,7 +697,7 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 												CreateLogEntry(szTemp);
 											}
 											DebugSpew("Using pAdvancedLootWnd->DoSharedAdvLootAction(....) to leave the item on the corpse");
-											pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 1, pShareItem->LootDetails.m_array[0].StackCount);
+											pAdvancedLootWnd->DoSharedAdvLootAction(*pShareItem, pChar->Name, 1, pShareItem->LootDetails[0].StackCount);
 										}
 										LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
 										return true;
@@ -755,7 +752,7 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 				}
 				else
 				{
-					DebugSpew("%s:: SList: Unable to access PLOOTITEM for item number = %d", PLUGIN_DEBUG_MSG, k);
+					DebugSpew("%s:: SList: Unable to access AdvancedLootItem* for item number = %d", PLUGIN_DEBUG_MSG, k);
 				}
 			}
 			else
@@ -775,34 +772,14 @@ bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PEQ
 
 bool WinState(CXWnd *Wnd) // Returns TRUE if the specified UI window is visible
 {
-	return (Wnd && ((PCSIDLWND)Wnd)->IsVisible());
-}
-
-PMQPLUGIN Plugin(char* PluginName)
-{
-	long Length = strlen(PluginName) + 1;
-	PMQPLUGIN pLook = pPlugins;
-	while (pLook && _strnicmp(PluginName, pLook->szFilename, Length)) pLook = pLook->pNext;
-	return pLook;
+	return Wnd && Wnd->IsVisible();
 }
 
 bool HandleEQBC()
 {
-	unsigned short sEQBCConnected = 0;
-	bool bEQBCLoaded = false;
-	unsigned short(*fisConnected)() = NULL;
-	fAreTheyConnected = NULL;
-	if (PMQPLUGIN pLook = Plugin("mq2eqbc"))
-	{
-		fisConnected = (unsigned short(*)())GetProcAddress(pLook->hModule, "isConnected");
-		fAreTheyConnected = (bool(*)(char* szName))GetProcAddress(pLook->hModule, "AreTheyConnected");
-		bEQBCLoaded = true;
-	}
-	if (fisConnected && bEQBCLoaded)
-	{
-		sEQBCConnected = fisConnected();
-	}
-	if (fisConnected && fAreTheyConnected && sEQBCConnected && bEQBCLoaded)
+	auto fisConnected = (unsigned short(*)())GetPluginProc("mq2eqbc", "isConnected");
+	EQBC_AreTheyConnected = (bool(*)(const char* szName))GetPluginProc("mq2eqbc", "AreTheyConnected");
+	if (fisConnected && EQBC_AreTheyConnected && fisConnected())
 	{
 		return true;
 	}
@@ -849,11 +826,9 @@ bool AmITheMasterLooter(PCHARINFO pChar, bool* pbMasterLooter) // Determines if 
 				{
 					if (pMember->MasterLooter) // Ok we found the ML
 					{
-						if (pMember->pName) // and we know their name
+						if (!pMember->Name.empty()) // and we know their name
 						{
-							CHAR Name[MAX_STRING] = { 0 };
-							GetCXStr(pChar->pGroupInfo->pMember[ml]->pName, Name, MAX_STRING);
-							if (!_stricmp(pChar->Name, Name)) // Ok so I am the ML
+							if (ci_equals(pMember->Name, pChar->Name)) // Ok so I am the ML
 							{
 								*pbMasterLooter = true;
 							}
@@ -892,7 +867,7 @@ bool AmITheMasterLooter(PCHARINFO pChar, bool* pbMasterLooter) // Determines if 
 	return false; // no fucking way this would ever happen, since this only gets called when doing shared loot stuff
 }
 
-bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOTITEM pLootItem, bool bMasterLooter, char* pszItemAction, bool* pbIWant, bool* pbCheckIfOthersWant)
+bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PcProfile* pChar2, AdvancedLootItem* pLootItem, bool bMasterLooter, char* pszItemAction, bool* pbIWant, bool* pbCheckIfOthersWant)
 {
 	CHAR INISection[]{ pLootItem->Name[0],'\0' };
 	CHAR Value[MAX_STRING];
@@ -915,7 +890,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 			{ // Ok lets populate the loot entry after the advanced loot window is not open
 				InitialLootEntry(pLootItem, false);
 				// Ok so lets handle this item like we would if we a loot entry
-				if (!ItemOnCursor && !pLootItem->LootDetails.m_array[0].Locked && DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) && !CheckIfItemIsLoreByID(pLootItem->ItemID))
+				if (!ItemOnCursor && !pLootItem->LootDetails[0].Locked && DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails[0].StackCount, true) && !CheckIfItemIsLoreByID(pLootItem->ItemID))
 				{
 					if (pLootItem->NoDrop)
 					{
@@ -945,7 +920,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 		strcpy_s(pszItemAction, sizeof(char[MAX_STRING]), pParsedValue);
 		if (!_stricmp(pParsedValue, "Keep") || !_stricmp(pParsedValue, "Deposit") || !_stricmp(pParsedValue, "Sell") || !_stricmp(pParsedValue, "Barter"))
 		{
-			if ((ItemOnCursor || pLootItem->LootDetails.m_array[0].Locked || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
+			if ((ItemOnCursor || pLootItem->LootDetails[0].Locked || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
 			{
 				if (bMasterLooter)
 				{
@@ -960,7 +935,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 		}
 		else if (!_stricmp(Value, "Destroy"))
 		{
-			if ((ItemOnCursor || pLootItem->LootDetails.m_array[0].Locked || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, false) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
+			if ((ItemOnCursor || pLootItem->LootDetails[0].Locked || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails[0].StackCount, false) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
 			{
 			}
 			else
@@ -992,10 +967,10 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 			{
 				if (IsNumber(pParsedValue))
 				{
-					QuestNumber = atoi(pParsedValue);
+					QuestNumber = GetIntFromString(pParsedValue, QuestNumber);
 				}
 			}
-			if ((ItemOnCursor || pLootItem->LootDetails.m_array[0].Locked || QuestNumber <= FindItemCount(pLootItem->Name) || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
+			if ((ItemOnCursor || pLootItem->LootDetails[0].Locked || QuestNumber <= FindItemCount(pLootItem->Name) || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
 			{
 				if (bMasterLooter)
 				{
@@ -1017,13 +992,13 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 			if (pParsedValue == NULL)
 			{
 				DebugSpew("iSpamLootInfo = %d", iSpamLootInfo);
-				if (PCONTENTS pItem = FindBankItemByID((DWORD)pLootItem->ItemID))
+				if (CONTENTS* pItem = FindBankItemByID((DWORD)pLootItem->ItemID))
 				{
 					WriteChatf("%s:: Found:\ag%s\ax, in my bank!", PLUGIN_CHAT_MSG, pLootItem->Name);
 					CreateLootEntry("Gear", "", GetItemFromContents(pItem));
 					return false;
 				}
-				else if (PCONTENTS pItem = FindItemByID((DWORD)pLootItem->ItemID))
+				else if (CONTENTS* pItem = FindItemByID((DWORD)pLootItem->ItemID))
 				{
 					WriteChatf("%s:: Found:\ag%s\ax, in my packs!", PLUGIN_CHAT_MSG, pLootItem->Name);
 					CreateLootEntry("Gear", "", GetItemFromContents(pItem));
@@ -1061,7 +1036,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 					{
 						if (IsNumber(pParsedValue))
 						{
-							GearNumber = atoi(pParsedValue);
+							GearNumber = GetIntFromString(pParsedValue, GearNumber);
 							DebugSpew("Setting GearNumber to %d", GearNumber);
 						}
 						break;
@@ -1073,10 +1048,9 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 			DebugSpew("!RightClass = !%d", RightClass);
 			DebugSpew("GearNumber <= FindItemCount(pLootItem->Name) = %d <= %d", GearNumber, FindItemCount(pLootItem->Name));
 			DebugSpew("ItemOnCursor = %d", ItemOnCursor);
-			DebugSpew("pLootItem->LootDetails.m_array[0].Locked = %u", pLootItem->LootDetails.m_array[0].Locked);
-			DebugSpew("!DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) = !%d", DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true));
-			DebugSpew("CheckIfItemIsLoreByID(pLootItem->ItemID) = %d", CheckIfItemIsLoreByID(pLootItem->ItemID));
-			if ((!RightClass || ItemOnCursor || pLootItem->LootDetails.m_array[0].Locked || GearNumber <= FindItemCount(pLootItem->Name) || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
+			DebugSpew("pLootItem->LootDetails.m_array[0].Locked = %u", pLootItem->LootDetails[0].Locked);
+			DebugSpew("!DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails.m_array[0].StackCount, true) = !%d", DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails[0].StackCount, true));
+			if ((!RightClass || ItemOnCursor || pLootItem->LootDetails[0].Locked || GearNumber <= FindItemCount(pLootItem->Name) || !DoIHaveSpace(pLootItem->Name, pLootItem->MaxStack, pLootItem->LootDetails[0].StackCount, true) || CheckIfItemIsLoreByID(pLootItem->ItemID)))
 			{
 				DebugSpew("We passed all the previous checks");
 				if (bMasterLooter)
@@ -1102,7 +1076,7 @@ bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PCHARINFO2 pChar2, PLOOT
 	return false;
 }
 
-void InitialLootEntry(PLOOTITEM pLootItem, bool bCreateImmediately)
+void InitialLootEntry(AdvancedLootItem* pLootItem, bool bCreateImmediately)
 {
 	if (pLootItem)
 	{
@@ -1165,13 +1139,13 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 	LONG nPack = 0;
 	LONG Count = 0;
 	PCHARINFO pCharInfo = GetCharInfo();
-	PCHARINFO2 pChar2 = GetCharInfo2();
+	auto pChar2 = GetPcProfile();
 
 	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
 	{
 		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++)
 		{
-			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
 			{
 				if (PITEMINFO theitem = GetItemFromContents(pItem))
 				{
@@ -1201,7 +1175,7 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 	{
 		for (unsigned long nPack = 0; nPack < 10; nPack++)
 		{
-			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
@@ -1211,7 +1185,7 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 						{
 							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
 							{
-								if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+								if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
 								{
 									if (PITEMINFO theitem = GetItemFromContents(pItem))
 									{
@@ -1272,12 +1246,12 @@ bool FitInInventory(DWORD pdItemSize)
 	LONG nPack = 0;
 	LONG Count = 0;
 	PCHARINFO pCharInfo = GetCharInfo();
-	PCHARINFO2 pChar2 = GetCharInfo2();
+	auto pChar2 = GetPcProfile();
 	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
 	{
 		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++)
 		{
-			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
 			{
 
 			}
@@ -1291,7 +1265,7 @@ bool FitInInventory(DWORD pdItemSize)
 	{
 		for (unsigned long nPack = 0; nPack < 10; nPack++)
 		{
-			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
@@ -1301,7 +1275,7 @@ bool FitInInventory(DWORD pdItemSize)
 						{
 							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
 							{
-								if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+								if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
 								{
 
 								}
@@ -1332,11 +1306,11 @@ bool FitInInventory(DWORD pdItemSize)
 int CheckIfItemIsLoreByID(int64_t ID)
 {
 	DWORD ItemID = (DWORD)ID;
-	if (PCONTENTS pItem = FindItemByID(ItemID))
+	if (CONTENTS* pItem = FindItemByID(ItemID))
 	{
 		return GetItemFromContents(FindItemByID(ItemID))->Lore;
 	}
-	if (PCONTENTS pItem = FindBankItemByID(ItemID))
+	if (CONTENTS* pItem = FindBankItemByID(ItemID))
 	{
 		return GetItemFromContents(FindBankItemByID(ItemID))->Lore;
 	}
@@ -1348,13 +1322,13 @@ int FindItemCount(CHAR* pszItemName)
 	LONG nPack = 0;
 	DWORD Count = 0;
 	DWORD nAug = 0;
-	PCHARINFO2 pChar2 = GetCharInfo2();
+	auto pChar2 = GetPcProfile();
 	// I explicitly don't check cursor since we don't loot anything when an item is on our cursor
 	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
 	{
 		for (unsigned long nSlot = 0; nSlot < NUM_INV_SLOTS; nSlot++) //NUM_INV_SLOTS == 33
 		{
-			if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
 			{
 				if (PITEMINFO theitem = GetItemFromContents(pItem))
 				{
@@ -1396,7 +1370,7 @@ int FindItemCount(CHAR* pszItemName)
 	{
 		for (unsigned long nPack = 0; nPack < 10; nPack++)
 		{
-			if (PCONTENTS pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
@@ -1404,7 +1378,7 @@ int FindItemCount(CHAR* pszItemName)
 					{
 						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
 						{
-							if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+							if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
 							{
 								if (PITEMINFO theitem = GetItemFromContents(pItem))
 								{
@@ -1497,7 +1471,7 @@ int FindItemCount(CHAR* pszItemName)
 						{
 							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
 							{
-								if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+								if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
 								{
 									if (PITEMINFO theitem = GetItemFromContents(pItem))
 									{
@@ -1590,7 +1564,7 @@ int FindItemCount(CHAR* pszItemName)
 						{
 							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
 							{
-								if (PCONTENTS pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+								if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
 								{
 									if (PITEMINFO theitem = GetItemFromContents(pItem))
 									{
@@ -1644,22 +1618,15 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 		hPassOutLootThread = 0;
 		return 0;
 	}
-	if (!WinState((CXWnd*)pAdvancedLootWnd))
-	{
-		LootTimer = pluginclock::now();
-		hPassOutLootThread = 0;
-		return 0;
-	}
-	PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd;
-	if (!pAdvLoot)
+	if (!WinState(pAdvancedLootWnd))
 	{
 		LootTimer = pluginclock::now();
 		hPassOutLootThread = 0;
 		return 0;
 	}
 	CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
-	CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList;
-	if (LootInProgress(pAdvLoot, pPersonalList, pSharedList))
+	CListWnd *pSharedList = pAdvancedLootWnd->pCLootList->SharedLootList;
+	if (LootInProgress(pAdvancedLootWnd, pPersonalList, pSharedList))
 	{
 		LootTimer = pluginclock::now();
 		hPassOutLootThread = 0;
@@ -1668,118 +1635,116 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 	LONG k = (LONG)pData;
 	if (pSharedList->GetItemData(k) != -1)
 	{
-		DWORD multiplier = sizeof(LOOTITEM) * (int)pSharedList->GetItemData(k);
-		if (PLOOTITEM pShareItem = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
+		auto pShareItem = &pAdvancedLootWnd->pCLootList->Items[(int)pSharedList->GetItemData(k)];
+		if (iLogLoot)
 		{
-			if (iLogLoot)
-			{
-				if (PCHARINFO pChar = GetCharInfo())
-				{
-					if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
-					{
-						sprintf_s(szTemp, "%s :: SList: Attempting to pass out %s to my raid members", pChar->Name, pShareItem->Name);
-					}
-					else
-					{
-						sprintf_s(szTemp, "%s :: SList: Attempting to pass out %s to my group members", pChar->Name, pShareItem->Name);
-					}
-					CreateLogEntry(szTemp);
-				}
-			}
-			if (iSpamLootInfo)
-			{
-				WriteChatfSafe("%s:: SList: Setting the DistributeLootTimer to \ag%d\ax seconds", PLUGIN_CHAT_MSG, iDistributeLootDelay);
-			}
-			pluginclock::time_point DistributeLootTimer = pluginclock::now() + std::chrono::seconds(iDistributeLootDelay);
-			while (pluginclock::now() < DistributeLootTimer) // While loop to wait for DistributeLootDelay to time out
-			{
-				Sleep(100);
-			}
-			if (!InGameOK() || !WinState((CXWnd*)pAdvancedLootWnd))
-			{
-				LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-				hPassOutLootThread = 0;
-				return 0;
-			}
-			if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
-			{
-				for (int nMember = 0; nMember < 72; nMember++)
-				{
-					if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
-					{
-						if (PCHARINFO pChar = GetCharInfo())
-						{
-							if (pRaid->RaidMemberUsed[nMember]) // Ok this raid slot has a character in it
-							{
-								if (_stricmp(pChar->Name, pRaid->RaidMember[nMember].Name)) // The character isn't me
-								{
-									if (GetSpawnByName(pRaid->RaidMember[nMember].Name)) // The character is in the zone
-									{
-										if (DistributeLoot(pRaid->RaidMember[nMember].Name, pShareItem, k))
-										{
-											LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-											hPassOutLootThread = 0;
-											return 0;
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-			else // Ok so we're not in a raid, maybe we are in a group
-			{
-				for (int nMember = 1; nMember < 6; nMember++) // Lets start at 1, since I am in position 0
-				{
-					if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
-					{
-						if (PCHARINFO pChar = GetCharInfo())
-						{
-							if (pChar->pGroupInfo)
-							{
-								if (auto pMember = pChar->pGroupInfo->pMember[nMember])
-								{
-									if (!pMember->Mercenary && !pMember->Offline && pMember->pSpawn) // They aren't offline
-									{
-										if (DistributeLoot(pMember->pSpawn->Name, pShareItem, k))
-										{
-											LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-											hPassOutLootThread = 0;
-											return 0;
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
 			if (PCHARINFO pChar = GetCharInfo())
 			{
-				if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
+				if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
 				{
-					if (iSpamLootInfo)
-					{
-						WriteChatfSafe("%s:: SList: No one wanted \ag%s\ax setting to leave", PLUGIN_CHAT_MSG, pShareItem->Name);
-					}
-					if (iLogLoot)
-					{
-						sprintf_s(szTemp, "%s :: SList: Attempted to pass out %s and no one wanted, leaving it on the corpse", pChar->Name, pShareItem->Name);
-						CreateLogEntry(szTemp);
-					}
-					pAdvancedLootWnd->DoSharedAdvLootAction(pShareItem, &CXStr(pChar->Name), 1, pShareItem->LootDetails.m_array[0].StackCount); // Leaving the item on the corpse
-					bDistributeItemFailed = false;
+					sprintf_s(szTemp, "%s :: SList: Attempting to pass out %s to my raid members", pChar->Name, pShareItem->Name);
 				}
 				else
 				{
-					DebugSpew("%s:: SList: After no one wanted the item, the attempt to leave on an item failed due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
+					sprintf_s(szTemp, "%s :: SList: Attempting to pass out %s to my group members", pChar->Name, pShareItem->Name);
 				}
+				CreateLogEntry(szTemp);
+			}
+		}
+		if (iSpamLootInfo)
+		{
+			WriteChatf("%s:: SList: Setting the DistributeLootTimer to \ag%d\ax seconds", PLUGIN_CHAT_MSG, iDistributeLootDelay);
+		}
+		pluginclock::time_point DistributeLootTimer = pluginclock::now() + std::chrono::seconds(iDistributeLootDelay);
+		while (pluginclock::now() < DistributeLootTimer) // While loop to wait for DistributeLootDelay to time out
+		{
+			Sleep(100);
+		}
+		if (!InGameOK() || !WinState(pAdvancedLootWnd))
+		{
+			LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+			hPassOutLootThread = 0;
+			return 0;
+		}
+		if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
+		{
+			for (int nMember = 0; nMember < 72; nMember++)
+			{
+				if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.GetSize() > 0)
+				{
+					if (PCHARINFO pChar = GetCharInfo())
+					{
+						if (pRaid->RaidMemberUsed[nMember]) // Ok this raid slot has a character in it
+						{
+							if (_stricmp(pChar->Name, pRaid->RaidMember[nMember].Name)) // The character isn't me
+							{
+								if (GetSpawnByName(pRaid->RaidMember[nMember].Name)) // The character is in the zone
+								{
+									if (DistributeLoot(pRaid->RaidMember[nMember].Name, pShareItem, k))
+									{
+										LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+										hPassOutLootThread = 0;
+										return 0;
+									}
+
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		else // Ok so we're not in a raid, maybe we are in a group
+		{
+			for (int nMember = 1; nMember < 6; nMember++) // Lets start at 1, since I am in position 0
+			{
+				if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.GetSize() > 0)
+				{
+					if (PCHARINFO pChar = GetCharInfo())
+					{
+						if (pChar->pGroupInfo)
+						{
+							if (auto pMember = pChar->pGroupInfo->pMember[nMember])
+							{
+								if (!pMember->Type == EQP_NPC && !pMember->Offline && pMember->pSpawn) // They aren't offline
+								{
+									if (DistributeLoot(pMember->pSpawn->Name, pShareItem, k))
+									{
+										LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+										hPassOutLootThread = 0;
+										return 0;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		if (PCHARINFO pChar = GetCharInfo())
+		{
+			if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.GetSize() > 0)
+			{
+				if (iSpamLootInfo)
+				{
+					WriteChatf("%s:: SList: No one wanted \ag%s\ax setting to leave", PLUGIN_CHAT_MSG, pShareItem->Name);
+				}
+				if (iLogLoot)
+				{
+					sprintf_s(szTemp, "%s :: SList: Attempted to pass out %s and no one wanted, leaving it on the corpse", pChar->Name, pShareItem->Name);
+					CreateLogEntry(szTemp);
+				}
+				pAdvancedLootWnd->DoSharedAdvLootAction(*pShareItem, pChar->Name, 1, pShareItem->LootDetails[0].StackCount); // Leaving the item on the corpse
+				bDistributeItemFailed = false;
 			}
 			else
 			{
-				DebugSpew("%s:: SList: After no one wanted the item, the attempt to leave on an item failed due not being able to get PCHARINFO", PLUGIN_DEBUG_MSG);
+				DebugSpew("%s:: SList: After no one wanted the item, the attempt to leave on an item failed due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
 			}
+		}
+		else
+		{
+			DebugSpew("%s:: SList: After no one wanted the item, the attempt to leave on an item failed due not being able to get PCHARINFO", PLUGIN_DEBUG_MSG);
 		}
 	}
 	LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
@@ -1787,7 +1752,7 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 	return 0;
 }
 
-bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem, LONG ItemIndex)
+bool DistributeLoot(CHAR* szName, AdvancedLootItem* pShareItem, LONG ItemIndex)
 {
 	bDistributeItemSucceeded = false;
 	bDistributeItemFailed = false;
@@ -1798,79 +1763,71 @@ bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem, LONG ItemIndex)
 	PCHARINFO pChar = GetCharInfo();
 	if (iSpamLootInfo)
 	{
-		WriteChatfSafe("%s:: SList: Attempting to give \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pShareItem->Name, szName);
+		WriteChatf("%s:: SList: Attempting to give \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pShareItem->Name, szName);
 	}
 	if (iLogLoot)
 	{
 		sprintf_s(szTemp, "%s :: SList: Attempting to distribute %s to %s", pChar->Name, pShareItem->Name, szName);
 		CreateLogEntry(szTemp);
 	}
-	if (!WinState((CXWnd*)pAdvancedLootWnd))
-	{
-		return true;
-	}
-	PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd;
-	if (!pAdvLoot)
+	if (!WinState(pAdvancedLootWnd))
 	{
 		return true;
 	}
 	CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
-	CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList;
+	CListWnd *pSharedList = pAdvancedLootWnd->pCLootList->SharedLootList;
 	LootTimer = pluginclock::now() + std::chrono::seconds(30); // Lets lock out the plugin from doing loot actions while we attempt to pass out items
 	pluginclock::time_point WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
 	while (pluginclock::now() < WhileTimer) // While loop to wait till we are done with the previous looting command
 	{
-		if (!InGameOK() || !WinState((CXWnd*)pAdvancedLootWnd))
+		if (!InGameOK() || !WinState(pAdvancedLootWnd))
 		{
 			return true;
 		}
-		if (!LootInProgress(pAdvLoot, pPersonalList, pSharedList))
+		if (!LootInProgress(pAdvancedLootWnd, pPersonalList, pSharedList))
 		{
 			WhileTimer = pluginclock::now();
 		}
 		Sleep(10);  // Sleep for 10 ms and lets check the previous conditions again
 	}
-	if (LootInProgress(pAdvLoot, pPersonalList, pSharedList))
+	if (LootInProgress(pAdvancedLootWnd, pPersonalList, pSharedList))
 	{
 		return true;
 	}
-	if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.m_length > 0)
+	if (pAdvancedLootWnd && pShareItem && pShareItem->LootDetails.GetSize() > 0)
 	{
 		if (pSharedList->GetItemData(ItemIndex) != -1)
 		{
-			DWORD multiplier = sizeof(LOOTITEM) * (int)pSharedList->GetItemData(ItemIndex);
-			if (PLOOTITEM pShareItemNew = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
+			auto pShareItemNew = &pAdvancedLootWnd->pCLootList->Items[(int)pSharedList->GetItemData(ItemIndex)];
+			if (pShareItemNew && pShareItemNew->LootDetails.GetSize() > 0)
 			{
-				if (pShareItemNew && pShareItemNew->LootDetails.m_length > 0)
+				if (pShareItemNew->ItemID == pShareItem->ItemID)
 				{
-					if (pShareItemNew->ItemID == pShareItem->ItemID)
+					bDistributeItemSucceeded = false;
+					bDistributeItemFailed = false;
+					pAdvancedLootWnd->DoSharedAdvLootAction(*pShareItemNew, szName, 0, pShareItemNew->LootDetails[0].StackCount);
+					pluginclock::time_point WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
+					while (pluginclock::now() < WhileTimer) // While loop to wait till we are done with the previous looting command
 					{
-						bDistributeItemSucceeded = false;
-						bDistributeItemFailed = false;
-						pAdvancedLootWnd->DoSharedAdvLootAction(pShareItemNew, &CXStr(szName), 0, pShareItemNew->LootDetails.m_array[0].StackCount);
-						pluginclock::time_point WhileTimer = pluginclock::now() + std::chrono::seconds(10); // Will wait up to 10 seconds or until I have an item in my cursor
-						while (pluginclock::now() < WhileTimer) // While loop to wait till we are done with the previous looting command
+						if (!InGameOK() || !WinState(pAdvancedLootWnd))
 						{
-							if (!InGameOK() || !WinState((CXWnd*)pAdvancedLootWnd))
-							{
-								return true;
-							}
-							if (bDistributeItemSucceeded)
-							{
-								return true;
-							}
-							if (bDistributeItemFailed)
-							{
-								return false;
-							}
-							Sleep(10);  // Sleep for 10 ms and lets check the previous conditions again
+							return true;
 						}
+						if (bDistributeItemSucceeded)
+						{
+							return true;
+						}
+						if (bDistributeItemFailed)
+						{
+							return false;
+						}
+						Sleep(10);  // Sleep for 10 ms and lets check the previous conditions again
 					}
-					else
-					{
-						DebugSpew("%s:: SList: Attempted to pass out an item but couldn't due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
-						return true;
-					}
+				}
+				else
+				{
+					DebugSpew("%s:: SList: Attempted to pass out an item but couldn't due to bad pShareItem->LootDetails", PLUGIN_DEBUG_MSG);
+					return true;
 				}
 			}
 		}
@@ -1881,22 +1838,19 @@ bool DistributeLoot(CHAR* szName, PLOOTITEM pShareItem, LONG ItemIndex)
 bool ContinueCheckingSharedLoot() // Will stop looping through the shared loot list when the number of items clicked need/greed is equal or exceeds the number of free inventory slots
 {
 	int iItemSelected = 0;
-	if (PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd)
+	if (pAdvancedLootWnd)
 	{
-		if (CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList)
+		if (CListWnd *pSharedList = (CListWnd *)pAdvancedLootWnd->pCLootList->SharedLootList)
 		{
 			for (LONG k = 0; k < pSharedList->ItemsArray.Count; k++)
 			{
 				LONG listindex = (LONG)pSharedList->GetItemData(k);
 				if (listindex != -1)
 				{
-					DWORD multiplier = sizeof(LOOTITEM) * listindex;
-					if (PLOOTITEM pShareItem = (PLOOTITEM)(((DWORD)pAdvLoot->pCLootList->pLootItem) + multiplier))
+					auto pShareItem = &pAdvancedLootWnd->pCLootList->Items[listindex];
+					if (pShareItem->Need || pShareItem->Greed) // Ok lets check to see if we have need or greed boxes check
 					{
-						if (pShareItem->Need || pShareItem->Greed) // Ok lets check to see if we have need or greed boxes check
-						{
-							iItemSelected++;
-						}
+						iItemSelected++;
 					}
 				}
 			}
@@ -1920,7 +1874,7 @@ bool ContinueCheckingSharedLoot() // Will stop looping through the shared loot l
 int AutoLootFreeInventory()
 {
 	int freeslots = 0;
-	if (PCHARINFO2 pChar2 = GetCharInfo2())
+	if (auto pChar2 = GetPcProfile())
 	{
 		for (DWORD slot = BAG_SLOT_START; slot < NUM_INV_SLOTS; slot++)
 		{
@@ -1930,7 +1884,7 @@ int AutoLootFreeInventory()
 			}
 			if (pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray && pChar2->pInventoryArray->InventoryArray[slot])
 			{
-				if (PCONTENTS pItem = pChar2->pInventoryArray->InventoryArray[slot])
+				if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[slot])
 				{
 					if (GetItemFromContents(pItem)->Type == ITEMTYPE_PACK && _stricmp(GetItemFromContents(pItem)->Name, szExcludeBag1) && _stricmp(GetItemFromContents(pItem)->Name, szExcludeBag2))
 					{
@@ -2106,7 +2060,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	{
 		if (IsNumber(Parm2))
 		{
-			iBarMinSellPrice = atoi(Parm2);
+			iBarMinSellPrice = GetIntFromString(Parm2, iBarMinSellPrice);
 			WritePrivateProfileString("Settings", "BarMinSellPrice", Parm2, szLootINI);
 			WriteChatf("%s:: Stop looting when \ag%d\ax slots are left", PLUGIN_CHAT_MSG, iBarMinSellPrice);
 		}
@@ -2119,7 +2073,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	{
 		if (IsNumber(Parm2))
 		{
-			iSaveBagSlots = atoi(Parm2);
+			iSaveBagSlots = GetIntFromString(Parm2, iSaveBagSlots);
 			WritePrivateProfileString("Settings", "SaveBagSlots", Parm2, szLootINI);
 			WriteChatf("%s:: Stop looting when \ag%d\ax slots are left", PLUGIN_CHAT_MSG, iSaveBagSlots);
 		}
@@ -2132,7 +2086,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	{
 		if (IsNumber(Parm2))
 		{
-			iDistributeLootDelay = atoi(Parm2);
+			iDistributeLootDelay = GetIntFromString(Parm2, iDistributeLootDelay);
 			WritePrivateProfileString("Settings", "DistributeLootDelay", Parm2, szLootINI);
 			WriteChatf("%s:: The master looter will wait \ag%d\ax seconds before trying to distribute loot", PLUGIN_CHAT_MSG, iDistributeLootDelay);
 		}
@@ -2145,7 +2099,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	{
 		if (IsNumber(Parm2))
 		{
-			iNewItemDelay = atoi(Parm2);
+			iNewItemDelay = GetIntFromString(Parm2, iNewItemDelay);
 			WritePrivateProfileString("Settings", "NewItemDelay", Parm2, szLootINI);
 			WriteChatf("%s:: The master looter will wait \ag%d\ax seconds when a new item drops before looting that item", PLUGIN_CHAT_MSG, iNewItemDelay);
 		}
@@ -2158,7 +2112,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	{
 		if (IsNumber(Parm2))
 		{
-			iCursorDelay = atoi(Parm2);
+			iCursorDelay = GetIntFromString(Parm2, iCursorDelay);
 			WritePrivateProfileString("Settings", "CursorDelay", Parm2, szLootINI);
 			WriteChatf("%s:: You will wait \ag%d\ax seconds before trying to autoinventory items on your cursor", PLUGIN_CHAT_MSG, iCursorDelay);
 		}
@@ -2171,7 +2125,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	{
 		if (IsNumber(Parm2))
 		{
-			iQuestKeep = atoi(Parm2);
+			iQuestKeep = GetIntFromString(Parm2, iQuestKeep);
 			WritePrivateProfileString("Settings", "QuestKeep", Parm2, szLootINI);
 			WriteChatf("%s:: Your default number to keep of new no drop items is: \ag%d\ax", PLUGIN_CHAT_MSG, iQuestKeep);
 		}
@@ -2242,7 +2196,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	}
 	else if (!_stricmp(Parm1, "lootini"))
 	{
-		sprintf_s(szLootINI, "%s\\Macros\\%s.ini", gszINIPath, Parm2);
+		sprintf_s(szLootINI, "%s\\%s.ini", gPathConfig, Parm2);
 		WritePrivateProfileString(GetCharInfo()->Name, "lootini", szLootINI, INIFileName);
 		WriteChatf("%s:: The location for your loot ini is:\n \ag%s\ax", PLUGIN_CHAT_MSG, szLootINI);
 		SetAutoLootVariables();
@@ -2402,17 +2356,17 @@ void SetItemCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	}
 	else if (!_stricmp(Parm1, "Keep") || !_stricmp(Parm1, "Sell") || !_stricmp(Parm1, "Deposit") || !_stricmp(Parm1, "Barter") || !_stricmp(Parm1, "Gear") || !_stricmp(Parm1, "Quest") || !_stricmp(Parm1, "Ignore") || !_stricmp(Parm1, "Destroy") || !_stricmp(Parm1, "Status"))
 	{
-		if (PCHARINFO2 pChar2 = GetCharInfo2())
+		if (auto pChar2 = GetPcProfile())
 		{
 			if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
 			{
-				if (PCONTENTS pItem = pChar2->pInventoryArray->Inventory.Cursor)
+				if (CONTENTS* pItem = pChar2->pInventoryArray->Inventory.Cursor)
 				{
 					CreateLootEntry(Parm1, Parm2, GetItemFromContents(pItem));
 				}
 				else
 				{
-					WriteChatf("%s:: There is no way this should fail as far as I know. There is an item on your cursor, but you were unable to get PCONTENTS from it.", PLUGIN_CHAT_MSG);
+					WriteChatf("%s:: There is no way this should fail as far as I know. There is an item on your cursor, but you were unable to get CONTENTS* from it.", PLUGIN_CHAT_MSG);
 				}
 			}
 			else
@@ -2422,7 +2376,7 @@ void SetItemCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 		}
 		else
 		{
-			WriteChatf("%s:: There is no way this should fail as far as I know.  The plugin failed to get GetCharInfo2", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: There is no way this should fail as far as I know.  The plugin failed to get GetPcProfile", PLUGIN_CHAT_MSG);
 		}
 	}
 	else
@@ -2478,14 +2432,14 @@ void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
 	}
 	else if (!_stricmp(szAction, "Quest"))
 	{
-		int QuestNumber = atoi(szEntry);
+		int QuestNumber = GetIntFromString(szEntry, 0);
 		sprintf_s(INIValue, "Quest|%d", QuestNumber);
 		WritePrivateProfileString(INISection, pItem->Name, INIValue, szLootINI);
 		WriteChatf("%s:: Setting \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pItem->Name, INIValue);
 	}
 	else if (!_stricmp(szAction, "Barter"))
 	{
-		int BarterNumber = atoi(szEntry);
+		int BarterNumber = GetIntFromString(szEntry, 0);
 		sprintf_s(INIValue, "Barter|%d", BarterNumber);
 		WritePrivateProfileString(INISection, pItem->Name, INIValue, szLootINI);
 		WriteChatf("%s:: Setting \ag%s\ax to \ag%s\ax", PLUGIN_CHAT_MSG, pItem->Name, INIValue);
@@ -2538,11 +2492,11 @@ void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
 		WriteChatf("%s:: Invalid command.  The accepted commands are [Quest #n|Gear|Keep|Sell|Ignore|Destroy]", PLUGIN_CHAT_MSG);
 	}
 
-	if (PCHARINFO2 pChar2 = GetCharInfo2())
+	if (auto pChar2 = GetPcProfile())
 	{
 		if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
 		{
-			if (PCONTENTS pItem = pChar2->pInventoryArray->Inventory.Cursor)
+			if (CONTENTS* pItem = pChar2->pInventoryArray->Inventory.Cursor)
 			{
 				if (!_stricmp(szAction, "Destroy"))
 				{
@@ -2598,36 +2552,36 @@ public:
 		TypeMember(FreeInventory);
 	}
 
-	bool GetMember(MQ2VARPTR VarPtr, char* Member, char* Index, MQ2TYPEVAR &Dest)
+	bool GetMember(MQVarPtr VarPtr, char* Member, char* Index, MQTypeVar &Dest)
 	{
-		PMQ2TYPEMEMBER pMember = MQ2AutoLootType::FindMember(Member);
+		MQTypeMember* pMember = MQ2AutoLootType::FindMember(Member);
 		if (pMember)
 		{
 			switch ((AutoLootMembers)pMember->ID)
 			{
 			case Active:
 				Dest.DWord = iUseAutoLoot;
-				Dest.Type = pBoolType;
+				Dest.Type = mq::datatypes::pBoolType;
 				return true;
 			case SellActive:
 				Dest.DWord = bSellActive;
-				Dest.Type = pBoolType;
+				Dest.Type = mq::datatypes::pBoolType;
 				return true;
 			case BuyActive:
 				Dest.DWord = bBuyActive;
-				Dest.Type = pBoolType;
+				Dest.Type = mq::datatypes::pBoolType;
 				return true;
 			case DepositActive:
 				Dest.DWord = bDepositActive;
-				Dest.Type = pBoolType;
+				Dest.Type = mq::datatypes::pBoolType;
 				return true;
 			case BarterActive:
 				Dest.DWord = bBarterActive;
-				Dest.Type = pBoolType;
+				Dest.Type = mq::datatypes::pBoolType;
 				return true;
 			case FreeInventory:
 				Dest.DWord = AutoLootFreeInventory();
-				Dest.Type = pIntType;
+				Dest.Type = mq::datatypes::pIntType;
 				return true;
 			}
 			return false;
@@ -2635,16 +2589,16 @@ public:
 		return false;
 	}
 
-	bool ToString(MQ2VARPTR VarPtr, PCHAR Destination)
+	bool ToString(MQVarPtr VarPtr, PCHAR Destination)
 	{
 		strcpy_s(Destination, MAX_STRING, "TRUE");
 		return true;
 	}
-	bool FromData(MQ2VARPTR &VarPtr, MQ2TYPEVAR &Source)
+	bool FromData(MQVarPtr &VarPtr, MQTypeVar &Source)
 	{
 		return false;
 	}
-	bool FromString(MQ2VARPTR &VarPtr, PCHAR Source)
+	bool FromString(MQVarPtr &VarPtr, PCHAR Source)
 	{
 		return false;
 	}
@@ -2654,7 +2608,7 @@ public:
 	}
 };
 
-int dataAutoLoot(char* szName, MQ2TYPEVAR &Ret)
+bool dataAutoLoot(const char* szName, MQTypeVar &Ret)
 {
 	Ret.DWord = 1;
 	Ret.Type = pAutoLootType;
@@ -2667,7 +2621,7 @@ int dataAutoLoot(char* szName, MQ2TYPEVAR &Ret)
 ****
 ********************************************************************************/
 
-PLUGIN_API VOID InitializePlugin()
+PLUGIN_API void InitializePlugin()
 {
 	// commands
 	AddCommand("/autoloot", AutoLootCommand);
@@ -2679,7 +2633,7 @@ PLUGIN_API VOID InitializePlugin()
 	pAutoLootType = new MQ2AutoLootType;
 }
 
-PLUGIN_API VOID ShutdownPlugin()
+PLUGIN_API void ShutdownPlugin()
 {
 	// remove commands
 	RemoveCommand("/autoloot");
@@ -2717,7 +2671,7 @@ PLUGIN_API VOID ShutdownPlugin()
 	delete pAutoLootType;
 }
 
-PLUGIN_API VOID SetGameState(DWORD GameState)
+PLUGIN_API void SetGameState(int GameState)
 {
 	Initialized = false;
 	if (!InGameOK())
@@ -2731,60 +2685,59 @@ PLUGIN_API VOID SetGameState(DWORD GameState)
 	}
 }
 
-PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
+PLUGIN_API bool OnIncomingChat(const char* Line, DWORD Color)
 {
 	if (!InGameOK())
 	{
-		return 0;
+		return false;
 	}
 
-	if (WinState((CXWnd*)pAdvancedLootWnd))
+	if (WinState(pAdvancedLootWnd))
 	{
 		if (strstr(Line, "It is either on their never list or they have selected No."))
 		{
 			bDistributeItemFailed = true;
-			return 0;
+			return false;
 		}
 		if (strstr(Line, "already has") && strstr(Line, "and it is lore."))
 		{
 			bDistributeItemFailed = true;
-			return 0;
+			return false;
 		}
 		if (strstr(Line, "A ") && strstr(Line, " was given to "))
 		{
 			bDistributeItemSucceeded = true;
-			return 0;
+			return false;
 		}
 	}
 
-	if (WinState((CXWnd*)pMerchantWnd) && pMerchantWnd->GetFirstChildWnd() && pMerchantWnd->GetFirstChildWnd()->GetNextSiblingWnd())
+	if (WinState(pMerchantWnd) && pMerchantWnd->GetFirstChildWnd() && pMerchantWnd->GetFirstChildWnd()->GetNextSiblingWnd())
 	{
 		CHAR MerchantText[MAX_STRING] = { 0 };
-		CHAR MerchantName[MAX_STRING] = { 0 };
-		GetCXStr(pMerchantWnd->GetFirstChildWnd()->CGetWindowText(), MerchantName, MAX_STRING);
-		sprintf_s(MerchantText, "%s says, 'Hi there, %s. Just browsing?  Have you seen the ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
+		auto MerchantName = pMerchantWnd->GetFirstChildWnd()->GetWindowText();
+		sprintf_s(MerchantText, "%s says, 'Hi there, %s. Just browsing?  Have you seen the ", MerchantName.c_str(), GetCharInfo()->Name); // Confirmed 04/15/2017
 		if (strstr(Line, MerchantText)) // Merchant window is populated
 		{
 			LootThreadTimer = pluginclock::now();
-			return 0;
+			return false;
 		}
-		sprintf_s(MerchantText, "%s says, 'Welcome to my shop, %s. You would probably find a ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
+		sprintf_s(MerchantText, "%s says, 'Welcome to my shop, %s. You would probably find a ", MerchantName.c_str(), GetCharInfo()->Name); // Confirmed 04/15/2017
 		if (strstr(Line, MerchantText)) // Merchant window is populated
 		{
 			LootThreadTimer = pluginclock::now();
-			return 0;
+			return false;
 		}
-		sprintf_s(MerchantText, "%s says, 'Hello there, %s. How about a nice ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
+		sprintf_s(MerchantText, "%s says, 'Hello there, %s. How about a nice ", MerchantName.c_str(), GetCharInfo()->Name); // Confirmed 04/15/2017
 		if (strstr(Line, MerchantText)) // Merchant window is populated
 		{
 			LootThreadTimer = pluginclock::now();
-			return 0;
+			return false;
 		}
-		sprintf_s(MerchantText, "%s says, 'Greetings, %s. You look like you could use a ", MerchantName, GetCharInfo()->Name); // Confirmed 04/15/2017
+		sprintf_s(MerchantText, "%s says, 'Greetings, %s. You look like you could use a ", MerchantName.c_str(), GetCharInfo()->Name); // Confirmed 04/15/2017
 		if (strstr(Line, MerchantText)) // Merchant window is populated
 		{
 			LootThreadTimer = pluginclock::now();
-			return 0;
+			return false;
 		}
 	}
 
@@ -2792,7 +2745,7 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 	{
 		LootThreadTimer = pluginclock::now() + std::chrono::milliseconds(2000); // TODO determine what is an appropriate delay
 	}
-	else if (WinState((CXWnd*)FindMQ2Window("BarterSearchWnd")))
+	else if (WinState(FindMQ2Window("BarterSearchWnd")))
 	{
 		if (strstr(Line, "You've sold ") && strstr(Line, " to ") && strstr(Line, "."))
 		{
@@ -2805,17 +2758,17 @@ PLUGIN_API DWORD OnIncomingChat(PCHAR Line, DWORD Color)
 		}
 	}
 
-	return 0;
+	return false;
 }
 
-PLUGIN_API VOID OnPulse()
+PLUGIN_API void OnPulse()
 {
 	if (!InGameOK())
 	{
 		return;
 	}
 	PCHARINFO pChar = GetCharInfo();
-	PCHARINFO2 pChar2 = GetCharInfo2();
+	auto pChar2 = GetPcProfile();
 	if (DoThreadAction())
 	{
 		return; // Do actions from threads that need to be in the pulse to stop crashing to desktop
@@ -2842,36 +2795,33 @@ PLUGIN_API VOID OnPulse()
 	{
 		return; // Your in a raid and don't want to use mq2autoloot, turning mq2autoloot off
 	}
-	if (!WinState((CXWnd*)pAdvancedLootWnd))
+	if (!WinState(pAdvancedLootWnd))
 	{
 		ClearLootEntries();
 		return;
 	}
-	if (PEQADVLOOTWND pAdvLoot = (PEQADVLOOTWND)pAdvancedLootWnd)
+	if (SetLootSettings())
 	{
-		if (SetLootSettings())
-		{
-			return; // Turn off Auto Loot All
-		}
-		CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
-		CListWnd *pSharedList = (CListWnd *)pAdvLoot->pCLootList->SharedLootList;
-		if (LootInProgress(pAdvLoot, pPersonalList, pSharedList))
+		return; // Turn off Auto Loot All
+	}
+	CListWnd *pPersonalList = (CListWnd *)pAdvancedLootWnd->GetChildItem("ADLW_PLLList");
+	CListWnd *pSharedList = (CListWnd *)pAdvancedLootWnd->pCLootList->SharedLootList;
+	if (LootInProgress(pAdvancedLootWnd, pPersonalList, pSharedList))
+	{
+		return;
+	}
+	if (pPersonalList)
+	{
+		if (HandlePersonalLoot(ItemOnCursor, pChar, pChar2, pAdvancedLootWnd, pPersonalList, pSharedList))
 		{
 			return;
 		}
-		if (pPersonalList)
+	}
+	if (pSharedList)
+	{
+		if (HandleSharedLoot(ItemOnCursor, pChar, pChar2, pAdvancedLootWnd, pPersonalList, pSharedList))
 		{
-			if (HandlePersonalLoot(ItemOnCursor, pChar, pChar2, pAdvLoot, pPersonalList, pSharedList))
-			{
-				return;
-			}
-		}
-		if (pSharedList)
-		{
-			if (HandleSharedLoot(ItemOnCursor, pChar, pChar2, pAdvLoot, pPersonalList, pSharedList))
-			{
-				return;
-			}
+			return;
 		}
 	}
 }
