@@ -1008,7 +1008,7 @@ void SelectBarterQuantity(int BarterMaximumIndex, const char* pszItemName, CList
 	if (WinState(pQuantityWnd))
 	{
 		int BarterCount = GetIntFromString(cBuyLineListWnd->GetItemText(BarterMaximumIndex, 2), 0);
-		int MyCount = FindItemCountByName(pszItemName, true);
+		int MyCount = FindItemCountByName(pszItemName);
 		if (MyCount == 0)
 		{
 			return;
@@ -1785,7 +1785,7 @@ DWORD __stdcall BarterItems(PVOID pData)
 										return 0;
 									}
 								}
-								if (FindItemCountByName(itemName.c_str(), true) > 0)
+								if (FindItemCountByName(itemName.c_str()) > 0)
 								{
 									if (CListWnd *cBuyLineListWnd = (CListWnd *)FindMQ2Window("BarterSearchWnd")->GetChildItem("BTRSRCH_BuyLineList"))
 									{
