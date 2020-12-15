@@ -369,15 +369,9 @@ bool FitInPersonalBank(PITEMINFO pItem)
 	}
 	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
 	{
-#if defined(NEWCHARINFO)
 		if (pChar->BankItems.Items.Size > (unsigned int)nPack)
 		{
 			if (!pChar->BankItems.Items[nPack].pObject)
-#else
-		if (pChar->pBankArray)
-		{
-			if (!pChar->pBankArray->Bank[nPack])
-#endif
 			{
 				return true;
 			}
@@ -390,15 +384,9 @@ bool FitInPersonalBank(PITEMINFO pItem)
 	//checking inside bank bags
 	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++) //checking bank slots
 	{
-#ifdef NEWCHARINFO
 		if (pChar->BankItems.Items.Size > (unsigned int)nPack)
 		{
 			if (PCONTENTS pPack = pChar->BankItems.Items[nPack].pObject)
-#else
-		if (pChar->pBankArray)
-		{
-			if (PCONTENTS pPack = pChar->pBankArray->Bank[nPack])
-#endif
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
