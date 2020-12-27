@@ -1421,11 +1421,19 @@ int FindItemCount(CHAR* pszItemName)
 		}
 	}
 	PCHARINFO pCharInfo = GetCharInfo();
+#ifdef NEWCHARINFO
 	if (pCharInfo && pCharInfo->BankItems.Items.Size) //checking bank slots
 	{
 		for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
 		{
 			if (PCONTENTS pPack = pCharInfo->BankItems.Items[nPack].pObject)
+#else
+	if (pCharInfo && pCharInfo->pBankArray) //checking bank slots
+	{
+		for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
+		{
+			if (PCONTENTS pPack = pCharInfo->pBankArray->Bank[nPack])
+#endif
 			{
 				if (GetItemFromContents(pPack)->Type != ITEMTYPE_PACK)  //It isn't a pack! we should see if this item is what we are looking for
 				{
@@ -1514,11 +1522,19 @@ int FindItemCount(CHAR* pszItemName)
 			}
 		}
 	}
+#ifdef NEWCHARINFO
 	if (pCharInfo && pCharInfo->SharedBankItems.Items.Size) //checking shared bank slots
 	{
 		for (nPack = 0; nPack < NUM_SHAREDBANK_SLOTS; nPack++)
 		{
 			if (PCONTENTS pPack = pCharInfo->SharedBankItems.Items[nPack].pObject)
+#else
+	if (pCharInfo && pCharInfo->pSharedBankArray) //checking shared bank slots
+	{
+		for (nPack = 0; nPack < NUM_SHAREDBANK_SLOTS; nPack++)
+		{
+			if (PCONTENTS pPack = pCharInfo->pSharedBankArray->SharedBank[nPack])
+#endif
 			{
 				if (GetItemFromContents(pPack)->Type != ITEMTYPE_PACK)  //It isn't a pack! we should see if this item is what we are looking for
 				{
