@@ -55,7 +55,7 @@ void InitialLootEntry(AdvancedLootItem* pLootItem, bool bCreateImmediately); // 
 bool DoIHaveSpace(CHAR* pszItemName, DWORD plMaxStackSize, DWORD pdStackSize, bool bSaveBagSlots);
 bool FitInInventory(DWORD pdItemSize);
 int  CheckIfItemIsLoreByID(int64_t ItemID);
-int FindItemCount(CHAR* pszItemName);
+int FindItemCount(const char* pszItemName);
 DWORD __stdcall PassOutLoot(PVOID pData); // Pass out items to the group or the raid
 bool DistributeLoot(CHAR* szName, AdvancedLootItem* pShareItem, LONG ItemIndex);
 bool ContinueCheckingSharedLoot(); // Will stop looping through the shared loot list when the number of items clicked need/greed is equal or exceeds the number of free inventory slots
