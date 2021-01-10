@@ -215,13 +215,13 @@ bool DoThreadAction() // Do actions from threads that need to be in the pulse to
 		if (PickupItem(eItemContainerPossessions, pItemToPickUp))
 		{
 			// Ok we succeeded in select the item to sell
-			DebugSpew("%s:: We suceeded in picking up \ar%s\ax", PLUGIN_DEBUG_MSG, pItemToPickUp->Item2->Name);
+			DebugSpew("%s:: We suceeded in picking up \ar%s\ax", PLUGIN_DEBUG_MSG, pItemToPickUp->GetName());
 		}
 		else
 		{
 			// Ok we failed to select the item to sell
-			WriteChatf("%s:: We failed to pick up \ar%s\ax", PLUGIN_CHAT_MSG, pItemToPickUp->Item2->Name);
-			DebugSpew("%s:: We failed to pick up \ar%s\ax", PLUGIN_DEBUG_MSG, pItemToPickUp->Item2->Name);
+			WriteChatf("%s:: We failed to pick up \ar%s\ax", PLUGIN_CHAT_MSG, pItemToPickUp->GetName());
+			DebugSpew("%s:: We failed to pick up \ar%s\ax", PLUGIN_DEBUG_MSG, pItemToPickUp->GetName());
 		}
 		pItemToPickUp = nullptr;
 		return true;
@@ -248,42 +248,39 @@ bool DoThreadAction() // Do actions from threads that need to be in the pulse to
 bool CheckCursor()  // Returns true if an item is on your cursor
 {
 	auto pChar2 = GetPcProfile();
-	if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
+	if (ItemClient* pItem = pChar2->GetInventorySlot(InvSlot_Cursor))
 	{
-		if (PITEMINFO pItem = GetItemFromContents(pChar2->pInventoryArray->Inventory.Cursor))
+		if (!WinState(pTradeWnd) && !WinState(pGiveWnd) && !WinState(pMerchantWnd) && !WinState(pBankWnd) && !WinState(FindMQ2Window("GuildBankWnd")) && !WinState(FindMQ2Window("TradeskillWnd")))
 		{
-			if (!WinState(pTradeWnd) && !WinState(pGiveWnd) && !WinState(pMerchantWnd) && !WinState(pBankWnd) && !WinState(FindMQ2Window("GuildBankWnd")) && !WinState(FindMQ2Window("TradeskillWnd")))
+			if (StartCursorTimer)  // Going to set CursorItemID and CursorTimer
 			{
-				if (StartCursorTimer)  // Going to set CursorItemID and CursorTimer
+				StartCursorTimer = false;
+				CursorItemID = pItem->GetID();
+				CursorTimer = pluginclock::now() + std::chrono::seconds(iCursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
+			}
+			else if (CursorItemID != pItem->GetID()) // You changed items on your cursor, time to reset CursorItemID and CursorTimer
+			{
+				CursorItemID = pItem->GetID();
+				CursorTimer = pluginclock::now() + std::chrono::seconds(iCursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
+			}
+			else if (pluginclock::now() > CursorTimer)  // Waited CursorDelay, now going to see if you have room to autoinventory the item on your cursor
+			{
+				if (FitInInventory(pItem->GetItemDefinition()->Size))
 				{
-					StartCursorTimer = false;
-					CursorItemID = pItem->ItemNumber;
-					CursorTimer = pluginclock::now() + std::chrono::seconds(iCursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
-				}
-				else if (CursorItemID != pItem->ItemNumber) // You changed items on your cursor, time to reset CursorItemID and CursorTimer
-				{
-					CursorItemID = pItem->ItemNumber;
-					CursorTimer = pluginclock::now() + std::chrono::seconds(iCursorDelay); // Wait CursorDelay in seconds before attempting to autoinventory the item on your cursor
-				}
-				else if (pluginclock::now() > CursorTimer)  // Waited CursorDelay, now going to see if you have room to autoinventory the item on your cursor
-				{
-					if (FitInInventory(pItem->Size))
+					if (iSpamLootInfo)
 					{
-						if (iSpamLootInfo)
-						{
-							WriteChatf("%s:: Putting \ag%s\ax into my inventory", PLUGIN_CHAT_MSG, pItem->Name);
-						}
-						DoCommand(GetCharInfo()->pSpawn, "/autoinventory");
+						WriteChatf("%s:: Putting \ag%s\ax into my inventory", PLUGIN_CHAT_MSG, pItem->GetName());
 					}
-					else
-					{
-						if (iSpamLootInfo)
-						{
-							WriteChatf("%s:: \ag%s\ax doesn't fit into my inventory", PLUGIN_CHAT_MSG, pItem->Name);
-						}
-					}
-					StartCursorTimer = true;
+					DoCommand(GetCharInfo()->pSpawn, "/autoinventory");
 				}
+				else
+				{
+					if (iSpamLootInfo)
+					{
+						WriteChatf("%s:: \ag%s\ax doesn't fit into my inventory", PLUGIN_CHAT_MSG, pItem->GetName());
+					}
+				}
+				StartCursorTimer = true;
 			}
 		}
 		return true;
@@ -314,59 +311,51 @@ bool DestroyStuff()
 		return true;
 	}
 	// Looping through the items in my inventory and seening if I want to sell/deposit them based on which window was open
-	if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
+	if (ItemPtr pItem = pChar2->GetInventorySlot(InvSlot_Cursor))
 	{
-		if (PITEMINFO pItem = GetItemFromContents(pChar2->pInventoryArray->Inventory.Cursor))
+		if (pItem->GetID() == DestroyID)
 		{
-			if (pItem->ItemNumber == DestroyID)
+			if (iSpamLootInfo)
 			{
-				if (iSpamLootInfo)
-				{
-					WriteChatf("%s:: Destroying \ar%s\ax!", PLUGIN_CHAT_MSG, pItem->Name);
-				}
-				DoCommand(GetCharInfo()->pSpawn, "/destroy");
+				WriteChatf("%s:: Destroying \ar%s\ax!", PLUGIN_CHAT_MSG, pItem->GetName());
+			}
+			DoCommand(GetCharInfo()->pSpawn, "/destroy");
+			LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+			DestroyID = 0;
+			return true;
+		}
+	}
+
+	//check my inventory slots
+	for (int nSlot = InvSlot_FirstBagSlot; nSlot < GetHighestAvailableBagSlot(); nSlot++)
+	{
+		if (CONTENTS* pItem = pChar2->GetInventorySlot(nSlot))
+		{
+			if (pItem->GetID() == DestroyID)
+			{
+				PickupItem(eItemContainerPossessions, pItem);
 				LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-				DestroyID = 0;
 				return true;
 			}
 		}
 	}
-	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
+
+	//Checking my bags
+	for (int nPack = InvSlot_FirstBagSlot; nPack < GetHighestAvailableBagSlot(); nPack++)
 	{
-		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++)
+		if (CONTENTS* pPack = pChar2->GetInventorySlot(nPack))
 		{
-			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			if (pPack->IsContainer())
 			{
-				if (pItem->ID == DestroyID)
+				for (const ItemPtr& pItem : pPack->GetHeldItems())
 				{
-					PickupItem(eItemContainerPossessions, pItem);
-					LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-					return true;
-				}
-			}
-		}
-	}
-	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
-	{
-		for (unsigned long nPack = 0; nPack < 10; nPack++)
-		{
-			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
-			{
-				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
-				{
-					if (pItemPack->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
+					if (pItem)
 					{
-						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+						if (pItem->GetID() == DestroyID)
 						{
-							if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
-							{
-								if (pItem->ID == DestroyID)
-								{
-									PickupItem(eItemContainerPossessions, pItem);
-									LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
-									return true;
-								}
-							}
+							PickupItem(eItemContainerPossessions, pItem.get());
+							LootTimer = pluginclock::now() + std::chrono::milliseconds(200);
+							return true;
 						}
 					}
 				}
@@ -394,25 +383,22 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 					{
 						for (int nLootSlots = 0; nLootSlots < (int)pLootWnd->NumOfSlots; nLootSlots++)
 						{
-							if (CONTENTS* pContents = pLootWnd->pInventoryArray->InventoryArray[nLootSlots])
+							if (CONTENTS* pItem = pLootWnd->GetLootItem(nLootSlots))
 							{
-								if (PITEMINFO pItem = GetItemFromContents(pContents))
+								if (ConfirmationText.find(pItem->GetName()) != std::string_view::npos)
 								{
-									if (ConfirmationText.find(pItem->Name) != std::string_view::npos)
+									if (!CheckIfItemIsLoreByID(pItem->GetID()))
 									{
-										if (!CheckIfItemIsLoreByID(pContents->ID))
+										//Ok so I don't have the item and it is lore or it is not lore and I can accept it
+										if (CXWnd *pWndButton = pWnd->GetChildItem("CD_Yes_Button"))
 										{
-											//Ok so I don't have the item and it is lore or it is not lore and I can accept it
-											if (CXWnd *pWndButton = pWnd->GetChildItem("CD_Yes_Button"))
+											if (iSpamLootInfo)
 											{
-												if (iSpamLootInfo)
-												{
-													WriteChatf("%s:: Accepting a no drop item", PLUGIN_CHAT_MSG);
-												}
-												SendWndClick2(pWndButton, "leftmouseup");
-												LootTimer = pluginclock::now() + std::chrono::milliseconds(1000);
-												return true;
+												WriteChatf("%s:: Accepting a no drop item", PLUGIN_CHAT_MSG);
 											}
+											SendWndClick2(pWndButton, "leftmouseup");
+											LootTimer = pluginclock::now() + std::chrono::milliseconds(1000);
+											return true;
 										}
 									}
 								}
@@ -1141,26 +1127,20 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 	PCHARINFO pCharInfo = GetCharInfo();
 	auto pChar2 = GetPcProfile();
 
-	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
+	if (pChar2)
 	{
-		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++)
+		//check my inventory slots
+		for (int nSlot = InvSlot_FirstBagSlot; nSlot < GetHighestAvailableBagSlot(); nSlot++)
 		{
-			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			if (ItemPtr pItem = pChar2->GetInventorySlot(nSlot))
 			{
-				if (PITEMINFO theitem = GetItemFromContents(pItem))
+				if (!_stricmp(pszItemName, pItem->GetName()))
 				{
-					if (!_stricmp(pszItemName, theitem->Name))
+					if (pItem->IsStackable())
 					{
-						if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
+						if (pdStackSize + pItem->GetItemCount() <= pdMaxStackSize)
 						{
-
-						}
-						else
-						{
-							if (pdStackSize + pItem->StackCount <= pdMaxStackSize)
-							{
-								FitInStack = true;
-							}
+							FitInStack = true;
 						}
 					}
 				}
@@ -1170,54 +1150,34 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 				Count++;
 			}
 		}
-	}
-	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
-	{
-		for (unsigned long nPack = 0; nPack < 10; nPack++)
+
+		//Checking my bags
+		for (int nPack = InvSlot_FirstBagSlot; nPack < GetHighestAvailableBagSlot(); nPack++)
 		{
-			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			if (CONTENTS* pPack = pChar2->GetInventorySlot(nPack))
 			{
-				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+				if (pPack->IsContainer())
 				{
-					if (pItemPack->Type == ITEMTYPE_PACK)
+					for (const ItemPtr& pItem : pPack->GetHeldItems())
 					{
-						if (pPack->Contents.ContainedItems.pItems)
+						if (pItem)
 						{
-							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+							if (!_stricmp(pszItemName, pItem->GetName()))
 							{
-								if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+								if (pItem->IsStackable())
 								{
-									if (PITEMINFO theitem = GetItemFromContents(pItem))
+									if (pdStackSize + pItem->GetItemCount() <= pdMaxStackSize)
 									{
-										if (!_stricmp(pszItemName, theitem->Name))
-										{
-											if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
-											{
-											}
-											else
-											{
-												if (pdStackSize + pItem->StackCount <= pdMaxStackSize)
-												{
-													FitInStack = true;
-												}
-											}
-										}
-									}
-								}
-								else
-								{
-									if (_stricmp(pItemPack->Name, szExcludeBag1) && _stricmp(pItemPack->Name, szExcludeBag2))
-									{
-										Count++;
+										FitInStack = true;
 									}
 								}
 							}
 						}
 						else
 						{
-							if (_stricmp(pItemPack->Name, szExcludeBag1) && _stricmp(pItemPack->Name, szExcludeBag2))
+							if (_stricmp(pPack->GetName(), szExcludeBag1) && _stricmp(pPack->GetName(), szExcludeBag2))
 							{
-								Count = Count + pItemPack->Slots;
+								Count++;
 							}
 						}
 					}
@@ -1247,54 +1207,28 @@ bool FitInInventory(DWORD pdItemSize)
 	LONG Count = 0;
 	PCHARINFO pCharInfo = GetCharInfo();
 	auto pChar2 = GetPcProfile();
-	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
+	if (pChar2)
 	{
-		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++)
+		//check my inventory slots
+		for (int nSlot = InvSlot_FirstBagSlot; nSlot < GetHighestAvailableBagSlot(); nSlot++)
 		{
-			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
-			{
-
-			}
-			else
-			{
+			if (!pChar2->GetInventorySlot(nSlot))
 				return true;
-			}
 		}
-	}
-	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
-	{
-		for (unsigned long nPack = 0; nPack < 10; nPack++)
-		{
-			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
-			{
-				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
-				{
-					if (pItemPack->Type == ITEMTYPE_PACK && _stricmp(pItemPack->Name, szExcludeBag1) && _stricmp(pItemPack->Name, szExcludeBag2))
-					{
-						if (pPack->Contents.ContainedItems.pItems)
-						{
-							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
-							{
-								if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
-								{
 
-								}
-								else
-								{
-									if (pItemPack->SizeCapacity >= pdItemSize)
-									{
-										return true;
-									}
-								}
-							}
-						}
-						else
-						{
-							if (pItemPack->SizeCapacity >= pdItemSize)
-							{
-								return true;
-							}
-						}
+		//Checking my bags
+		for (int nPack = InvSlot_FirstBagSlot; nPack < GetHighestAvailableBagSlot(); nPack++)
+		{
+			if (CONTENTS* pPack = pChar2->GetInventorySlot(nPack))
+			{
+				if (pPack->IsContainer()
+					&& _stricmp(pPack->GetName(), szExcludeBag1) != 0
+					&& _stricmp(pPack->GetName(), szExcludeBag2) != 0)
+				{
+					for (const ItemPtr& pItem : pPack->GetHeldItems())
+					{
+						if (!pItem && pPack->GetItemDefinition()->SizeCapacity >= pdItemSize)
+							return true;
 					}
 				}
 			}
@@ -1317,313 +1251,35 @@ int CheckIfItemIsLoreByID(int64_t ID)
 	return 0;
 }
 
-int FindItemCount(CHAR* pszItemName)
+// FIXME: Items - De-duplicate with core
+static int CountContainerItems(ItemContainer& container, int fromSlot, int toSlot, const char* name)
 {
-	LONG nPack = 0;
-	DWORD Count = 0;
-	DWORD nAug = 0;
-	auto pChar2 = GetPcProfile();
-	// I explicitly don't check cursor since we don't loot anything when an item is on our cursor
-	if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray) //check my inventory slots
+	int count = 0;
+	auto predicatedCountVisitor = [&](const ItemPtr& pItem, const ItemIndex& index)
 	{
-		for (unsigned long nSlot = 0; nSlot < NUM_INV_SLOTS; nSlot++) //NUM_INV_SLOTS == 33
-		{
-			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
-			{
-				if (PITEMINFO theitem = GetItemFromContents(pItem))
-				{
-					if (!_stricmp(pszItemName, theitem->Name))
-					{
-						if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
-						{
-							Count++;
-						}
-						else
-						{
-							Count += pItem->StackCount;
-						}
-					}
-					else if (theitem->Type != ITEMTYPE_PACK)// for augs
-					{
-						if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
-						{
-							for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
-							{
-								if (pItem->Contents.ContainedItems.pItems->Item[nAug])
-								{
-									if (PITEMINFO augitem = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
-									{
-										if (augitem->Type == ITEMTYPE_NORMAL && augitem->AugType && !_stricmp(pszItemName, augitem->Name))
-										{
-											Count++;
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
-	{
-		for (unsigned long nPack = 0; nPack < 10; nPack++)
-		{
-			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
-			{
-				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
-				{
-					if (pItemPack->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
-					{
-						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
-						{
-							if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
-							{
-								if (PITEMINFO theitem = GetItemFromContents(pItem))
-								{
-									if (!_stricmp(pszItemName, theitem->Name))
-									{
-										if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
-										{
-											Count++;
-										}
-										else
-										{
-											Count += pItem->StackCount;
-										}
-									}
-									else //check for augs
-									{
-										if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
-										{
-											for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
-											{
-												if (pItem->Contents.ContainedItems.pItems->Item[nAug])
-												{
-													if (PITEMINFO pAug = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
-													{
-														if (pAug->Type == ITEMTYPE_NORMAL && pAug->AugType && !_stricmp(pszItemName, pAug->Name))
-														{
-															Count++;
-														}
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	PCHARINFO pCharInfo = GetCharInfo();
-#ifdef NEWCHARINFO
-	if (pCharInfo && pCharInfo->BankItems.Items.Size) //checking bank slots
-	{
-		for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
-		{
-			if (PCONTENTS pPack = pCharInfo->BankItems.Items[nPack].pObject)
-#else
-	if (pCharInfo && pCharInfo->pBankArray) //checking bank slots
-	{
-		for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
-		{
-			if (PCONTENTS pPack = pCharInfo->pBankArray->Bank[nPack])
-#endif
-			{
-				if (GetItemFromContents(pPack)->Type != ITEMTYPE_PACK)  //It isn't a pack! we should see if this item is what we are looking for
-				{
-					if (PITEMINFO theitem = GetItemFromContents(pPack))
-					{
-						if (!_stricmp(pszItemName, theitem->Name))
-						{
-							if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pPack)->IsStackable() != 1))
-							{
-								Count++;
-							}
-							else
-							{
-								Count += pPack->StackCount;
-							}
-						}
-						else //check for augs
-						{
-							if (pPack->Contents.ContainedItems.pItems && pPack->Contents.ContainedItems.Size)
-							{
-								for (nAug = 0; nAug < pPack->Contents.ContainedItems.Size; nAug++)
-								{
-									if (pPack->Contents.ContainedItems.pItems->Item[nAug])
-									{
-										if (PITEMINFO pAug = GetItemFromContents(pPack->Contents.ContainedItems.pItems->Item[nAug]))
-										{
-											if (pAug->Type == ITEMTYPE_NORMAL && pAug->AugType && !_stricmp(pszItemName, pAug->Name))
-											{
-												Count++;
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-				else
-				{
-					if (pPack->Contents.ContainedItems.pItems)
-					{
-						if (PITEMINFO pItemPack = GetItemFromContents(pPack))
-						{
-							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
-							{
-								if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
-								{
-									if (PITEMINFO theitem = GetItemFromContents(pItem))
-									{
-										if (!_stricmp(pszItemName, theitem->Name))
-										{
-											if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
-											{
-												Count++;
-											}
-											else
-											{
-												Count += pItem->StackCount;
-											}
-										}
-										else //check for augs
-										{
-											if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
-											{
-												for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
-												{
-													if (pItem->Contents.ContainedItems.pItems->Item[nAug])
-													{
-														if (PITEMINFO pAug = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
-														{
-															if (pAug->Type == ITEMTYPE_NORMAL && pAug->AugType && !_stricmp(pszItemName, pAug->Name))
-															{
-																Count++;
-															}
-														}
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-#ifdef NEWCHARINFO
-	if (pCharInfo && pCharInfo->SharedBankItems.Items.Size) //checking shared bank slots
-	{
-		for (nPack = 0; nPack < NUM_SHAREDBANK_SLOTS; nPack++)
-		{
-			if (PCONTENTS pPack = pCharInfo->SharedBankItems.Items[nPack].pObject)
-#else
-	if (pCharInfo && pCharInfo->pSharedBankArray) //checking shared bank slots
-	{
-		for (nPack = 0; nPack < NUM_SHAREDBANK_SLOTS; nPack++)
-		{
-			if (PCONTENTS pPack = pCharInfo->pSharedBankArray->SharedBank[nPack])
-#endif
-			{
-				if (GetItemFromContents(pPack)->Type != ITEMTYPE_PACK)  //It isn't a pack! we should see if this item is what we are looking for
-				{
-					if (PITEMINFO theitem = GetItemFromContents(pPack))
-					{
-						if (!_stricmp(pszItemName, theitem->Name))
-						{
-							if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pPack)->IsStackable() != 1))
-							{
-								Count++;
-							}
-							else
-							{
-								Count += pPack->StackCount;
-							}
-						}
-						else //check for augs
-						{
-							if (pPack->Contents.ContainedItems.pItems && pPack->Contents.ContainedItems.Size)
-							{
-								for (nAug = 0; nAug < pPack->Contents.ContainedItems.Size; nAug++)
-								{
-									if (pPack->Contents.ContainedItems.pItems->Item[nAug])
-									{
-										if (PITEMINFO pAug = GetItemFromContents(pPack->Contents.ContainedItems.pItems->Item[nAug]))
-										{
-											if (pAug->Type == ITEMTYPE_NORMAL && pAug->AugType && !_stricmp(pszItemName, pAug->Name))
-											{
-												Count++;
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-				else
-				{
-					if (pPack->Contents.ContainedItems.pItems)
-					{
-						if (PITEMINFO pItemPack = GetItemFromContents(pPack))
-						{
-							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
-							{
-								if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
-								{
-									if (PITEMINFO theitem = GetItemFromContents(pItem))
-									{
-										if (!_stricmp(pszItemName, theitem->Name))
-										{
-											if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
-											{
-												Count++;
-											}
-											else
-											{
-												Count += pItem->StackCount;
-											}
-										}
-										else //check for augs
-										{
-											if (pItem->Contents.ContainedItems.pItems && pItem->Contents.ContainedItems.Size)
-											{
-												for (nAug = 0; nAug < pItem->Contents.ContainedItems.Size; nAug++)
-												{
-													if (pItem->Contents.ContainedItems.pItems->Item[nAug])
-													{
-														if (PITEMINFO pAug = GetItemFromContents(pItem->Contents.ContainedItems.pItems->Item[nAug]))
-														{
-															if (pAug->Type == ITEMTYPE_NORMAL && pAug->AugType && !_stricmp(pszItemName, pAug->Name))
-															{
-																Count++;
-															}
-														}
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return Count;
+		if (ci_equals(pItem->GetName(), name))
+			count += pItem->GetItemCount();
+	};
+
+	container.VisitItems(fromSlot, toSlot, -1, predicatedCountVisitor);
+	return count;
+}
+
+int FindItemCount(const char* pszItemName)
+{
+	PcProfile* pProfile = GetPcProfile();
+	if (!pProfile) return 0;
+
+	// Count worn items
+	int count = CountContainerItems(pProfile->GetItemPosessions(), InvSlot_FirstWornItem, InvSlot_LastWornItem, pszItemName);
+	// count items in bag slots
+	count += CountContainerItems(pProfile->GetItemPosessions(), InvSlot_FirstBagSlot, InvSlot_LastBagSlot, pszItemName);
+	// count items in bank slots
+	count += CountContainerItems(pCharData->BankItems, -1, -1, pszItemName);
+	// count items in shared bank slots
+	count += CountContainerItems(pCharData->SharedBankItems, -1, -1, pszItemName);
+
+	return count;
 }
 
 DWORD __stdcall PassOutLoot(PVOID pData)
@@ -1892,37 +1548,15 @@ int AutoLootFreeInventory()
 	int freeslots = 0;
 	if (auto pChar2 = GetPcProfile())
 	{
-		for (DWORD slot = BAG_SLOT_START; slot < NUM_INV_SLOTS; slot++)
+		for (int slot = InvSlot_FirstBagSlot; slot < GetHighestAvailableBagSlot(); slot++)
 		{
-			if (!HasExpansion(EXPANSION_HoT) && slot > BAG_SLOT_START + 7)
+			if (ItemPtr pItem = pChar2->GetInventorySlot(slot))
 			{
-				break;
-			}
-			if (pChar2->pInventoryArray && pChar2->pInventoryArray->InventoryArray && pChar2->pInventoryArray->InventoryArray[slot])
-			{
-				if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[slot])
+				if (pItem->IsContainer()
+					&& _stricmp(pItem->GetName(), szExcludeBag1) != 0
+					&& _stricmp(pItem->GetName(), szExcludeBag2) != 0)
 				{
-					if (GetItemFromContents(pItem)->Type == ITEMTYPE_PACK && _stricmp(GetItemFromContents(pItem)->Name, szExcludeBag1) && _stricmp(GetItemFromContents(pItem)->Name, szExcludeBag2))
-					{
-						if (!pItem->Contents.ContainedItems.pItems)
-						{
-							freeslots += GetItemFromContents(pItem)->Slots;
-						}
-						else
-						{
-							for (DWORD pslot = 0; pslot < (GetItemFromContents(pItem)->Slots); pslot++)
-							{
-								if (!pItem->GetContent(pslot))
-								{
-									freeslots++;
-								}
-							}
-						}
-					}
-				}
-				else
-				{
-					freeslots++;
+					freeslots += pItem->GetHeldItems().GetSize() - pItem->GetHeldItems().GetCount();
 				}
 			}
 			else
@@ -2372,27 +2006,15 @@ void SetItemCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	}
 	else if (!_stricmp(Parm1, "Keep") || !_stricmp(Parm1, "Sell") || !_stricmp(Parm1, "Deposit") || !_stricmp(Parm1, "Barter") || !_stricmp(Parm1, "Gear") || !_stricmp(Parm1, "Quest") || !_stricmp(Parm1, "Ignore") || !_stricmp(Parm1, "Destroy") || !_stricmp(Parm1, "Status"))
 	{
-		if (auto pChar2 = GetPcProfile())
+		auto pChar2 = GetPcProfile();
+
+		if (CONTENTS* pItem = pChar2->GetInventorySlot(InvSlot_Cursor))
 		{
-			if (pChar2 && pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
-			{
-				if (CONTENTS* pItem = pChar2->pInventoryArray->Inventory.Cursor)
-				{
-					CreateLootEntry(Parm1, Parm2, GetItemFromContents(pItem));
-				}
-				else
-				{
-					WriteChatf("%s:: There is no way this should fail as far as I know. There is an item on your cursor, but you were unable to get CONTENTS* from it.", PLUGIN_CHAT_MSG);
-				}
-			}
-			else
-			{
-				WriteChatf("%s:: There is no item on your cursor, please pick up the item and resend the command", PLUGIN_CHAT_MSG);
-			}
+			CreateLootEntry(Parm1, Parm2, GetItemFromContents(pItem));
 		}
 		else
 		{
-			WriteChatf("%s:: There is no way this should fail as far as I know.  The plugin failed to get GetPcProfile", PLUGIN_CHAT_MSG);
+			WriteChatf("%s:: There is no item on your cursor, please pick up the item and resend the command", PLUGIN_CHAT_MSG);
 		}
 	}
 	else
@@ -2510,28 +2132,25 @@ void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
 
 	if (auto pChar2 = GetPcProfile())
 	{
-		if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
+		if (CONTENTS* pItem = pChar2->GetInventorySlot(InvSlot_Cursor))
 		{
-			if (CONTENTS* pItem = pChar2->pInventoryArray->Inventory.Cursor)
+			if (!_stricmp(szAction, "Destroy"))
 			{
-				if (!_stricmp(szAction, "Destroy"))
+				if (iSpamLootInfo)
+				{
+					WriteChatf("%s:: Destroying \ar%s\ax", PLUGIN_CHAT_MSG, pItem->GetName());
+				}
+				DoCommand(GetCharInfo()->pSpawn, "/destroy");
+			}
+			else
+			{
+				if (FitInInventory(pItem->GetItemDefinition()->Size))
 				{
 					if (iSpamLootInfo)
 					{
-						WriteChatf("%s:: Destroying \ar%s\ax", PLUGIN_CHAT_MSG, pItem->Item2->Name);
+						WriteChatf("%s:: Putting \ag%s\ax into my inventory", PLUGIN_CHAT_MSG, pItem->GetName());
 					}
-					DoCommand(GetCharInfo()->pSpawn, "/destroy");
-				}
-				else
-				{
-					if (FitInInventory(pItem->Item2->Size))
-					{
-						if (iSpamLootInfo)
-						{
-							WriteChatf("%s:: Putting \ag%s\ax into my inventory", PLUGIN_CHAT_MSG, pItem->Item2->Name);
-						}
-						DoCommand(GetCharInfo()->pSpawn, "/autoinventory");
-					}
+					DoCommand(GetCharInfo()->pSpawn, "/autoinventory");
 				}
 			}
 		}
