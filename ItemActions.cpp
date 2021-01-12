@@ -281,14 +281,8 @@ void SellItem(CONTENTS* pItem)
 	short BagSlot = pItem->GlobalIndex.Index.GetSlot(1);
 	if (PITEMINFO theitem = GetItemFromContents(pItem))
 	{
-		if ((theitem->Type != ITEMTYPE_NORMAL) || (((EQ_Item*)pItem)->IsStackable() != 1))
-		{
-			sprintf_s(szCount, "1");
-		}
-		else
-		{
-			sprintf_s(szCount, "%d", pItem->StackCount);
-		}
+		sprintf_s(szCount, "%d", pItem->GetItemCount());
+
 		// We need to call PickupItem(eItemContainerPossessions, pItemToPickUp) within the pulse due to eq not being thread safe
 		pItemToPickUp = pItem; // This is our backhanded way of doing it to avoid crashing some people
 		pluginclock::time_point WhileTimer = pluginclock::now() + std::chrono::seconds(30);
@@ -354,38 +348,18 @@ bool FitInPersonalBank(PITEMINFO pItem)
 	{
 		return false;  // The item isn't in your loot.ini file
 	}
-	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++)
+
+	for (nPack = 0; nPack < GetAvailableBankSlots(); nPack++)
 	{
-#ifdef NEWCHARINFO
-		if (pChar->BankItems.Items.Size > (unsigned int)nPack)
-		{
-			if (!pChar->BankItems.Items[nPack].pObject)
-#else
-		if (pChar->pBankArray)
-		{
-			if (!pChar->pBankArray->Bank[nPack])
-#endif
-			{
-				return true;
-			}
-		}
-		else
-		{
+		if (!pChar->BankItems.GetItem(nPack))
 			return true;
-		}
 	}
 	//checking inside bank bags
-	for (nPack = 0; nPack < NUM_BANK_SLOTS; nPack++) //checking bank slots
+	for (nPack = 0; nPack < GetAvailableBankSlots(); nPack++) //checking bank slots
 	{
-#ifdef NEWCHARINFO
 		if (pChar->BankItems.Items.Size > (unsigned int)nPack)
 		{
-			if (PCONTENTS pPack = pChar->BankItems.Items[nPack].pObject)
-#else
-		if (pChar->pBankArray)
-		{
-			if (PCONTENTS pPack = pChar->pBankArray->Bank[nPack])
-#endif
+			if (ItemPtr pPack = pChar->BankItems.GetItem(nPack))
 			{
 				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
 				{
@@ -441,7 +415,7 @@ void PutInPersonalBank(PITEMINFO pItem)
 			}
 			if (auto pChar2 = GetPcProfile())
 			{
-				if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
+				if (pChar2->GetInventorySlot(InvSlot_Cursor))
 				{
 					break;
 				}
@@ -449,7 +423,7 @@ void PutInPersonalBank(PITEMINFO pItem)
 		}
 		if (auto pChar2 = GetPcProfile())
 		{
-			if (!pChar2->pInventoryArray || !pChar2->pInventoryArray->Inventory.Cursor)
+			if (!pChar2->GetInventorySlot(InvSlot_Cursor))
 			{
 				bEndThreads = true;
 			}
@@ -458,24 +432,21 @@ void PutInPersonalBank(PITEMINFO pItem)
 				bEndThreads = true;
 				return;
 			}
-			if (pChar2->pInventoryArray && pChar2->pInventoryArray->Inventory.Cursor)
+			if (CONTENTS* pItem2 = pChar2->GetInventorySlot(InvSlot_Cursor))
 			{
-				if (CONTENTS* pItem2 = pChar2->pInventoryArray->Inventory.Cursor)
+				if (WinState(pBankWnd))
 				{
-					if (WinState(pBankWnd))
+					if (CXWnd* pWndButton = pBankWnd->GetChildItem("BIGB_AutoButton"))
 					{
-						if (CXWnd *pWndButton = pBankWnd->GetChildItem("BIGB_AutoButton"))
+						if (FitInPersonalBank(GetItemFromContents(pItem2)))
 						{
-							if (FitInPersonalBank(GetItemFromContents(pItem2)))
+							if (iSpamLootInfo)
 							{
-								if (iSpamLootInfo)
-								{
-									WriteChatf("%s:: Putting \ag%s\ax into my personal bank", PLUGIN_CHAT_MSG, pItem2->Item2->Name);
-								}
-								pWndLeftMouseUp = pWndButton;
-								//SendWndClick2(pWndButton, "leftmouseup");
-								Sleep(1000);
+								WriteChatf("%s:: Putting \ag%s\ax into my personal bank", PLUGIN_CHAT_MSG, pItem2->GetName());
 							}
+							pWndLeftMouseUp = pWndButton;
+							//SendWndClick2(pWndButton, "leftmouseup");
+							Sleep(1000);
 						}
 					}
 				}
@@ -634,11 +605,11 @@ bool DepositItems(PITEMINFO pItem)  //This should only be run from inside thread
 			{
 				if (pChar2->pInventoryArray)
 				{
-					if (CONTENTS* pItem2 = pChar2->pInventoryArray->Inventory.Cursor)
+					if (CONTENTS* pItem2 = pChar2->GetInventorySlot(InvSlot_Cursor))
 					{
 						if (iSpamLootInfo)
 						{
-							WriteChatf("%s:: Putting \ag%s\ax into my guild bank", PLUGIN_CHAT_MSG, pItem2->Item2->Name);
+							WriteChatf("%s:: Putting \ag%s\ax into my guild bank", PLUGIN_CHAT_MSG, pItem2->GetName());
 						}
 						pWndLeftMouseUp = pWndButton;
 						//SendWndClick2(pWndButton, "leftmouseup");
@@ -1156,43 +1127,40 @@ DWORD __stdcall SellItems(PVOID pData)
 		{
 			if (auto pChar2 = GetPcProfile())
 			{
-				if (pChar2->pInventoryArray) //check my inventory slots
+				if (CONTENTS* pItem = pChar2->GetInventorySlot(nSlot)) //check my inventory slots
 				{
-					if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+					if (PITEMINFO theitem = GetItemFromContents(pItem))
 					{
-						if (PITEMINFO theitem = GetItemFromContents(pItem))
+						if (theitem->Type != ITEMTYPE_PACK)  //It isn't a pack! we should sell it
 						{
-							if (theitem->Type != ITEMTYPE_PACK)  //It isn't a pack! we should sell it
+							sprintf_s(INISection, "%c", theitem->Name[0]);
+							if (GetPrivateProfileString(INISection, theitem->Name, 0, Value, MAX_STRING, szLootINI) != 0)
 							{
-								sprintf_s(INISection, "%c", theitem->Name[0]);
-								if (GetPrivateProfileString(INISection, theitem->Name, 0, Value, MAX_STRING, szLootINI) != 0)
+								CHAR *pParsedToken = NULL;
+								CHAR *pParsedValue = strtok_s(Value, "|", &pParsedToken);
+								if (!_stricmp(pParsedValue, "Sell"))
 								{
-									CHAR *pParsedToken = NULL;
-									CHAR *pParsedValue = strtok_s(Value, "|", &pParsedToken);
-									if (!_stricmp(pParsedValue, "Sell"))
+									if (theitem->NoDrop &&  theitem->Cost > 0)
 									{
-										if (theitem->NoDrop &&  theitem->Cost > 0)
-										{
-											WriteChatf("%s:: Attempting to sell \ag%s\ax.", PLUGIN_CHAT_MSG, theitem->Name);
-											SellItem(pItem);
-										}
-										else if (!theitem->NoDrop)
-										{
-											WriteChatf("%s:: You attempted to sell \ag%s\ax, but it is no drop.  Setting to Keep in your loot ini file.", PLUGIN_CHAT_MSG, theitem->Name);
-											WritePrivateProfileString(INISection, theitem->Name, "Keep", szLootINI);
-										}
-										else if (theitem->Cost == 0)
-										{
-											WriteChatf("%s:: You attempted to sell \ag%s\ax, but it is worth nothing.  Setting to Keep in your loot ini file.", PLUGIN_CHAT_MSG, theitem->Name);
-											WritePrivateProfileString(INISection, theitem->Name, "Keep", szLootINI);
-										}
+										WriteChatf("%s:: Attempting to sell \ag%s\ax.", PLUGIN_CHAT_MSG, theitem->Name);
+										SellItem(pItem);
 									}
-									if (!InGameOK() || bEndThreads || !WinState(pMerchantWnd))
+									else if (!theitem->NoDrop)
 									{
-										ResetItemActions();
-										hSellItemsThread = 0;
-										return 0;
+										WriteChatf("%s:: You attempted to sell \ag%s\ax, but it is no drop.  Setting to Keep in your loot ini file.", PLUGIN_CHAT_MSG, theitem->Name);
+										WritePrivateProfileString(INISection, theitem->Name, "Keep", szLootINI);
 									}
+									else if (theitem->Cost == 0)
+									{
+										WriteChatf("%s:: You attempted to sell \ag%s\ax, but it is worth nothing.  Setting to Keep in your loot ini file.", PLUGIN_CHAT_MSG, theitem->Name);
+										WritePrivateProfileString(INISection, theitem->Name, "Keep", szLootINI);
+									}
+								}
+								if (!InGameOK() || bEndThreads || !WinState(pMerchantWnd))
+								{
+									ResetItemActions();
+									hSellItemsThread = 0;
+									return 0;
 								}
 							}
 						}
@@ -1200,59 +1168,49 @@ DWORD __stdcall SellItems(PVOID pData)
 				}
 			}
 		}
-		for (unsigned long nPack = 0; nPack < 10; nPack++)
+		for (int nPack = InvSlot_FirstBagSlot; nPack <= GetHighestAvailableBagSlot(); nPack++)
 		{
 			if (auto pChar2 = GetPcProfile())
 			{
-				if (pChar2->pInventoryArray) //Checking my bags
+				if (ItemClient* pPack = pChar2->GetInventorySlot(nPack)) //Checking my bags
 				{
-					if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+					if (pPack->IsContainer())
 					{
-						if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+						for (const ItemPtr& pItem : pPack->GetHeldItems())
 						{
-							if (pItemPack->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
+							if (!pItem) continue;
+
+							sprintf_s(INISection, "%c", pItem->GetName()[0]);
+							if (GetPrivateProfileString(INISection, pItem->GetName(), 0, Value, MAX_STRING, szLootINI) != 0)
 							{
-								for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+								CHAR* pParsedToken = NULL;
+								CHAR* pParsedValue = strtok_s(Value, "|", &pParsedToken);
+								if (!_stricmp(pParsedValue, "Sell"))
 								{
-									if (pPack && pPack->Contents.ContainedItems.pItems)
+									bool NoDrop = pItem->GetItemDefinition()->NoDrop;
+									int Cost = pItem->GetItemDefinition()->Cost;
+
+									if (NoDrop && Cost > 0)
 									{
-										if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
-										{
-											if (PITEMINFO theitem = GetItemFromContents(pItem))
-											{
-												sprintf_s(INISection, "%c", theitem->Name[0]);
-												if (GetPrivateProfileString(INISection, theitem->Name, 0, Value, MAX_STRING, szLootINI) != 0)
-												{
-													CHAR *pParsedToken = NULL;
-													CHAR *pParsedValue = strtok_s(Value, "|", &pParsedToken);
-													if (!_stricmp(pParsedValue, "Sell"))
-													{
-														if (theitem->NoDrop &&  theitem->Cost > 0)
-														{
-															WriteChatf("%s:: Attempting to sell \ag%s\ax.", PLUGIN_CHAT_MSG, theitem->Name);
-															SellItem(pItem);
-														}
-														else if (!theitem->NoDrop)
-														{
-															WriteChatf("%s:: Attempted to sell \ag%s\ax, but it is no drop.  Setting to Keep in your loot ini file.", PLUGIN_CHAT_MSG, theitem->Name);
-															WritePrivateProfileString(INISection, theitem->Name, "Keep", szLootINI);
-														}
-														else if (theitem->Cost == 0)
-														{
-															WriteChatf("%s:: Attempted to sell \ag%s\ax, but it is worth nothing.  Setting to Keep in your loot ini file.", PLUGIN_CHAT_MSG, theitem->Name);
-															WritePrivateProfileString(INISection, theitem->Name, "Keep", szLootINI);
-														}
-													}
-													if (!InGameOK() || bEndThreads || !WinState(pMerchantWnd))
-													{
-														ResetItemActions();
-														hSellItemsThread = 0;
-														return 0;
-													}
-												}
-											}
-										}
+										WriteChatf("%s:: Attempting to sell \ag%s\ax.", PLUGIN_CHAT_MSG, pItem->GetName());
+										SellItem(pItem.get());
 									}
+									else if (!NoDrop)
+									{
+										WriteChatf("%s:: Attempted to sell \ag%s\ax, but it is no drop.  Setting to Keep in your loot ini file.", PLUGIN_CHAT_MSG, pItem->GetName());
+										WritePrivateProfileString(INISection, pItem->GetName(), "Keep", szLootINI);
+									}
+									else if (Cost == 0)
+									{
+										WriteChatf("%s:: Attempted to sell \ag%s\ax, but it is worth nothing.  Setting to Keep in your loot ini file.", PLUGIN_CHAT_MSG, pItem->GetName());
+										WritePrivateProfileString(INISection, pItem->GetName(), "Keep", szLootINI);
+									}
+								}
+								if (!InGameOK() || bEndThreads || !WinState(pMerchantWnd))
+								{
+									ResetItemActions();
+									hSellItemsThread = 0;
+									return 0;
 								}
 							}
 						}
@@ -1500,11 +1458,11 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 	}
 	HideDoCommand(GetCharInfo()->pSpawn, "/keypress OPEN_INV_BAGS",true); // TODO check if this is necessary
 	Sleep(500); // TODO lets make a smart function that checks whether your bags are open
-	if (pChar2 && pChar2->pInventoryArray) //check my inventory slots
+	if (pChar2) //check my inventory slots
 	{
-		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++) // loop through my inventory
+		for (int nSlot = InvSlot_FirstBagSlot; nSlot <= GetHighestAvailableBagSlot(); nSlot++) // loop through my inventory
 		{
-			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			if (CONTENTS* pItem = pChar2->GetInventorySlot(nSlot))
 			{
 				if (PITEMINFO theitem = GetItemFromContents(pItem))
 				{
@@ -1528,33 +1486,29 @@ DWORD __stdcall DepositPersonalBanker(PVOID pData)
 		hDepositPersonalBankerThread = 0;
 		return 0;
 	}
-	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
+	if (pChar2) //Checking my bags
 	{
-		for (unsigned long nPack = 0; nPack < 10; nPack++)
+		for (int nPack = InvSlot_FirstBagSlot; nPack <= GetHighestAvailableBagSlot(); nPack++)
 		{
-			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			if (CONTENTS* pPack = pChar2->GetInventorySlot(nPack))
 			{
-				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+				if (pPack->IsContainer())
 				{
-					if (pItemPack->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
+					for (const ItemPtr& pItem : pPack->GetHeldItems())
 					{
-						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+						if (pItem)
 						{
-							if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+							ItemDefinition* theitem = pItem->GetItemDefinition();
+
+							if (FitInPersonalBank(theitem))
 							{
-								if (PITEMINFO theitem = GetItemFromContents(pItem))
-								{
-									if (FitInPersonalBank(theitem))
-									{
-										PutInPersonalBank(theitem);
-									}
-									if (!InGameOK() || bEndThreads || !WinState(pBankWnd))
-									{
-										ResetItemActions();
-										hDepositPersonalBankerThread = 0;
-										return 0;
-									}
-								}
+								PutInPersonalBank(theitem);
+							}
+							if (!InGameOK() || bEndThreads || !WinState(pBankWnd))
+							{
+								ResetItemActions();
+								hDepositPersonalBankerThread = 0;
+								return 0;
 							}
 						}
 					}
@@ -1637,11 +1591,11 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 	}
 	HideDoCommand(GetCharInfo()->pSpawn, "/keypress OPEN_INV_BAGS",true); // TODO check if this is necessary
 	Sleep(500);
-	if (pChar2 && pChar2->pInventoryArray) //check my inventory slots
+	if (pChar2) //check my inventory slots
 	{
-		for (unsigned long nSlot = BAG_SLOT_START; nSlot < NUM_INV_SLOTS; nSlot++) // loop through my inventory
+		for (int nSlot = InvSlot_FirstBagSlot; nSlot <= GetHighestAvailableBagSlot(); nSlot++) // loop through my inventory
 		{
-			if (CONTENTS* pItem = pChar2->pInventoryArray->InventoryArray[nSlot])
+			if (CONTENTS* pItem = pChar2->GetInventorySlot(nSlot))
 			{
 				if (PITEMINFO theitem = GetItemFromContents(pItem))
 				{
@@ -1671,39 +1625,35 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 		hDepositGuildBankerThread = 0;
 		return 0;
 	}
-	if (pChar2 && pChar2->pInventoryArray) //Checking my bags
+	if (pChar2) //Checking my bags
 	{
-		for (unsigned long nPack = 0; nPack < 10; nPack++)
+		for (int nPack = InvSlot_FirstBagSlot; nPack <= GetHighestAvailableBagSlot(); nPack++)
 		{
-			if (CONTENTS* pPack = pChar2->pInventoryArray->Inventory.Pack[nPack])
+			if (ItemClient* pPack = pChar2->GetInventorySlot(nPack))
 			{
-				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
+				if (pPack->IsContainer())
 				{
-					if (pItemPack->Type == ITEMTYPE_PACK && pPack->Contents.ContainedItems.pItems)
+					for (const ItemPtr& pItem : pPack->GetHeldItems())
 					{
-						for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
+						if (pItem)
 						{
-							if (CONTENTS* pItem = pPack->Contents.ContainedItems.pItems->Item[nItem])
+							ItemDefinition* theitem = pItem->GetItemDefinition();
+
+							if (CheckGuildBank(theitem))
 							{
-								if (PITEMINFO theitem = GetItemFromContents(pItem))
+								if (DepositItems(theitem))
 								{
-									if (CheckGuildBank(theitem))
+									if (PutInGuildBank(theitem))
 									{
-										if (DepositItems(theitem))
-										{
-											if (PutInGuildBank(theitem))
-											{
-												SetItemPermissions(theitem);
-											}
-										}
-									}
-									if (!InGameOK() || bEndThreads || !WinState(FindMQ2Window("GuildBankWnd")))
-									{
-										ResetItemActions();
-										hDepositGuildBankerThread = 0;
-										return 0;
+										SetItemPermissions(theitem);
 									}
 								}
+							}
+							if (!InGameOK() || bEndThreads || !WinState(FindMQ2Window("GuildBankWnd")))
+							{
+								ResetItemActions();
+								hDepositGuildBankerThread = 0;
+								return 0;
 							}
 						}
 					}
