@@ -778,7 +778,7 @@ bool AmITheMasterLooter(PCHARINFO pChar, bool* pbMasterLooter) // Determines if 
 	if (pRaid && pRaid->RaidMemberCount > 0) // Ok we're in a raid, lets see who should handle loot
 	{
 		int ml = 0;
-		for (ml = 0; ml < 72; ml++)
+		for (ml = 0; ml < MAX_RAID_SIZE; ml++)
 		{
 			if (pRaid->RaidMemberUsed[ml])
 			{
@@ -792,7 +792,7 @@ bool AmITheMasterLooter(PCHARINFO pChar, bool* pbMasterLooter) // Determines if 
 				}
 			}
 		}
-		if (ml == 72)
+		if (ml == MAX_RAID_SIZE)
 		{
 			if (!_stricmp(pChar->Name, pRaid->RaidLeaderName)) // Ok so we don't have a ML set, lets use the raid leader to handle loot
 			{
@@ -803,12 +803,12 @@ bool AmITheMasterLooter(PCHARINFO pChar, bool* pbMasterLooter) // Determines if 
 	}
 	else // Ok so we're not in a raid, maybe we are in a group
 	{
-		if (pChar->pGroupInfo && pChar->pGroupInfo->pMember && pChar->pGroupInfo->pMember[0])
+		if (pChar->pGroupInfo && pChar->pGroupInfo->GetGroupMember(0))
 		{
 			int ml = 0;
-			for (ml = 0; ml < 6; ml++) // Lets loop through the group and see if we can find the ML
+			for (ml = 0; ml < MAX_GROUP_SIZE; ml++) // Lets loop through the group and see if we can find the ML
 			{
-				if (auto pMember = pChar->pGroupInfo->pMember[ml])
+				if (auto pMember = pChar->pGroupInfo->GetGroupMember(ml))
 				{
 					if (pMember->MasterLooter) // Ok we found the ML
 					{
@@ -823,7 +823,7 @@ bool AmITheMasterLooter(PCHARINFO pChar, bool* pbMasterLooter) // Determines if 
 					}
 				}
 			}
-			if (ml == 6) // Ok we didn't find the ML
+			if (ml == MAX_GROUP_SIZE) // Ok we didn't find the ML
 			{
 				if (pChar->pGroupInfo->pLeader)
 				{
@@ -1376,7 +1376,7 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 					{
 						if (pChar->pGroupInfo)
 						{
-							if (auto pMember = pChar->pGroupInfo->pMember[nMember])
+							if (auto pMember = pChar->pGroupInfo->GetGroupMember(nMember))
 							{
 								if (!pMember->Type == EQP_NPC && !pMember->Offline && pMember->pSpawn) // They aren't offline
 								{
