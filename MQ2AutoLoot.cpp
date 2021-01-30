@@ -387,7 +387,7 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 			if (CStmlWnd *Child = (CStmlWnd*)pWnd->GetChildItem("CD_TextOutput"))
 			{
 				char ConfirmationText[MAX_STRING];
-				GetCXStr(Child->STMLText.Ptr, ConfirmationText, sizeof(ConfirmationText));
+				GetCXStr(Child->STMLText, ConfirmationText, sizeof(ConfirmationText));
 				if (strstr(ConfirmationText, "are you sure you wish to loot it?"))
 				{
 					if (WinState((CXWnd*)pLootWnd))
