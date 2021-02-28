@@ -23,7 +23,6 @@ void ResetItemActions();
 bool MoveToNPC(PSPAWNINFO pSpawn);
 bool HandleMoveUtils();  // Used to connect to MQ2MoveUtils
 bool OpenWindow(PSPAWNINFO pSpawn);
-bool CheckIfItemIsInSlot(short InvSlot, short BagSlot);
 bool WaitForItemToBeSelected(CONTENTS* pItem, short InvSlot, short BagSlot);
 bool WaitForItemToBeSold(short InvSlot, short BagSlot);
 void SellItem(CONTENTS* pItem);

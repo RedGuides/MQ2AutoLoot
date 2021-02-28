@@ -128,13 +128,11 @@ bool MoveToNPC(PSPAWNINFO pSpawn)
 					else
 					{
 						WriteChatf("%s:: I wasn't able to get to within 20 of my banker/merchant!", PLUGIN_CHAT_MSG);
-						return false;
 					}
 				}
 				else
 				{
 					WriteChatf("%s:: For some reason I can't find the distance to !", PLUGIN_CHAT_MSG);
-					return false;
 				}
 			}
 			else
@@ -145,14 +143,13 @@ bool MoveToNPC(PSPAWNINFO pSpawn)
 		else
 		{
 			WriteChatf("%s:: For some reason I can't find the distance to your npc!", PLUGIN_CHAT_MSG);
-			return false; // This shouldn't fail, but for some reason I wasn't able to get the location of the spawn I want to navigate to
 		}
 	}
 	else
 	{
 		WriteChatf("%s:: For some reason GetCharInfo() failed!", PLUGIN_CHAT_MSG);
-		return false; // This shouldn't fail, but for some reason I wasn't able to get the character's GetCharInfo()
 	}
+	return false;
 }
 
 bool HandleMoveUtils()
@@ -204,31 +201,16 @@ bool OpenWindow(PSPAWNINFO pSpawn)
 			}
 			return false;
 		}
-		else
-		{
-			WriteChatf("%s:: Your target has changed!", PLUGIN_CHAT_MSG);
-			bEndThreads = true;
-			return false;
-		}
+
+		WriteChatf("%s:: Your target has changed!", PLUGIN_CHAT_MSG);
 	}
 	else
 	{
 		WriteChatf("%s:: You don't have a target!", PLUGIN_CHAT_MSG);
-		bEndThreads = true;
-		return false;
 	}
-}
 
-bool CheckIfItemIsInSlot(short InvSlot, short BagSlot)
-{
-	if (CONTENTS* pTempItem = FindItemBySlot(InvSlot, BagSlot, eItemContainerPossessions))
-	{
-		return true; // shit still there
-	}
-	else
-	{
-		return false; // the item is gone
-	}
+	bEndThreads = true;
+	return false;
 }
 
 bool WaitForItemToBeSelected(CONTENTS* pItem, short InvSlot, short BagSlot)
@@ -242,7 +224,7 @@ bool WaitForItemToBeSelected(CONTENTS* pItem, short InvSlot, short BagSlot)
 			return false;
 		}
 
-		if (!CheckIfItemIsInSlot(InvSlot, BagSlot)) // There is no item in
+		if (!FindItemBySlot(InvSlot, BagSlot)) // There is no item in
 		{
 			return false;
 		}
@@ -266,7 +248,7 @@ bool WaitForItemToBeSold(short InvSlot, short BagSlot)
 		{
 			return true; // Return true will result in leaving the SellItem function
 		}
-		if (!CheckIfItemIsInSlot(InvSlot, BagSlot)) // There is no item in that slot
+		if (!FindItemBySlot(InvSlot, BagSlot)) // There is no item in that slot
 		{
 			return true;
 		}
@@ -279,51 +261,43 @@ void SellItem(CONTENTS* pItem)
 	CHAR szCount[MAX_STRING] = { 0 };
 	short InvSlot = pItem->GlobalIndex.Index.GetSlot(0);
 	short BagSlot = pItem->GlobalIndex.Index.GetSlot(1);
-	if (PITEMINFO theitem = GetItemFromContents(pItem))
-	{
-		sprintf_s(szCount, "%d", pItem->GetItemCount());
 
-		// We need to call PickupItem(eItemContainerPossessions, pItemToPickUp) within the pulse due to eq not being thread safe
-		pItemToPickUp = pItem; // This is our backhanded way of doing it to avoid crashing some people
-		pluginclock::time_point WhileTimer = pluginclock::now() + std::chrono::seconds(30);
-		while (pluginclock::now() < WhileTimer) // Will wait up to 30 seconds or until I get the merchant buys the item
+	sprintf_s(szCount, "%d", pItem->GetItemCount());
+
+	// We need to call PickupItem(eItemContainerPossessions, pItemToPickUp) within the pulse due to eq not being thread safe
+	pItemToPickUp = pItem; // This is our backhanded way of doing it to avoid crashing some people
+	pluginclock::time_point WhileTimer = pluginclock::now() + std::chrono::seconds(30);
+	while (pluginclock::now() < WhileTimer) // Will wait up to 30 seconds or until I get the merchant buys the item
+	{
+		if (!InGameOK() || bEndThreads || !WinState(pMerchantWnd))
 		{
-			if (!InGameOK() || bEndThreads || !WinState(pMerchantWnd))
+			return;
+		}
+		if (WaitForItemToBeSelected(pItem, InvSlot, BagSlot))
+		{
+			if (!FindItemBySlot(InvSlot, BagSlot))
 			{
 				return;
 			}
-			if (WaitForItemToBeSelected(pItem, InvSlot, BagSlot))
+
+			if (PCHARINFO pChar = GetCharInfo())
 			{
-				if (!InGameOK() || bEndThreads || !WinState(pMerchantWnd))
+				if (pMerchantWnd->SellButton->IsVisible())
 				{
-					return;
-				}
-				if (!CheckIfItemIsInSlot(InvSlot, BagSlot))
-				{
-					return;
-				}
-				else
-				{
-					if (PCHARINFO pChar = GetCharInfo())
+					if (pMerchantWnd->SellButton->IsEnabled())
 					{
-						if (pMerchantWnd->SellButton->IsVisible())
+						SellItem(pChar->pSpawn, szCount); // This is the command from MQ2Commands.cpp
+						if (WaitForItemToBeSold(InvSlot, BagSlot))
 						{
-							if (pMerchantWnd->SellButton->IsEnabled())
-							{
-								SellItem(pChar->pSpawn, szCount); // This is the command from MQ2Commands.cpp
-								if (WaitForItemToBeSold(InvSlot, BagSlot))
-								{
-									return;
-								}
-							}
+							return;
 						}
 					}
 				}
 			}
-			else
-			{
-				return;
-			}
+		}
+		else
+		{
+			return;
 		}
 	}
 }
