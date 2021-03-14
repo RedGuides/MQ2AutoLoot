@@ -2224,22 +2224,10 @@ public:
 		return false;
 	}
 
-	bool ToString(MQVarPtr VarPtr, PCHAR Destination)
+	bool ToString(MQVarPtr VarPtr, PCHAR Destination) override
 	{
 		strcpy_s(Destination, MAX_STRING, "TRUE");
 		return true;
-	}
-	bool FromData(MQVarPtr &VarPtr, MQTypeVar &Source)
-	{
-		return false;
-	}
-	virtual bool FromString(MQVarPtr &VarPtr, const char* Source) override
-	{
-		return false;
-	}
-	~MQ2AutoLootType()
-	{
-
 	}
 };
 

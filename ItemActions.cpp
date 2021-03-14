@@ -331,36 +331,15 @@ bool FitInPersonalBank(PITEMINFO pItem)
 	//checking inside bank bags
 	for (nPack = 0; nPack < GetAvailableBankSlots(); nPack++) //checking bank slots
 	{
-		if (pChar->BankItems.Items.Size > (unsigned int)nPack)
+		if (ItemPtr pPack = pChar->BankItems.GetItem(nPack))
 		{
-			if (ItemPtr pPack = pChar->BankItems.GetItem(nPack))
+			if (pPack->IsContainer()
+				&& _stricmp(pPack->GetName(), szExcludeBag1)
+				&& _stricmp(pPack->GetName(), szExcludeBag2)
+				&& pItem->Size <= pPack->GetItemDefinition()->SizeCapacity)
 			{
-				if (PITEMINFO pItemPack = GetItemFromContents(pPack))
-				{
-					if (pItemPack->Type == ITEMTYPE_PACK && _stricmp(pItemPack->Name, szExcludeBag1) && _stricmp(pItemPack->Name, szExcludeBag2))
-					{
-						if (pPack->Contents.ContainedItems.pItems)
-						{
-							for (unsigned long nItem = 0; nItem < pItemPack->Slots; nItem++)
-							{
-								if (!pPack->Contents.ContainedItems.pItems->Item[nItem])
-								{
-									if (pItemPack->SizeCapacity >= pItem->Size)
-									{
-										return true; // This bag slot is empty and out item fits
-									}
-								}
-							}
-						}
-						else
-						{
-							if (pItemPack->SizeCapacity >= pItem->Size)
-							{
-								return true; // The bag array is empty, this means it was never initialized and thus should be empty
-							}
-						}
-					}
-				}
+				if (!pPack->GetHeldItems().IsFull())
+					return true;
 			}
 		}
 	}
