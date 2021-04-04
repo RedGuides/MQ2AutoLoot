@@ -1122,9 +1122,7 @@ void InitialLootEntry(AdvancedLootItem* pLootItem, bool bCreateImmediately)
 bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bool bSaveBagSlots)
 {
 	bool FitInStack = false;
-	LONG nPack = 0;
-	LONG Count = 0;
-	PCHARINFO pCharInfo = GetCharInfo();
+	int Count = 0;
 	auto pChar2 = GetPcProfile();
 
 	if (pChar2)
@@ -1185,15 +1183,7 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 			}
 		}
 	}
-	if (Count > iSaveBagSlots && bSaveBagSlots)
-	{
-		return true;
-	}
-	else if (Count > 0 && !bSaveBagSlots)
-	{
-		return true;
-	}
-	else if (FitInStack)
+	if (FitInStack || Count > (bSaveBagSlots ? iSaveBagSlots : 0))
 	{
 		return true;
 	}
@@ -1202,10 +1192,6 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 
 bool FitInInventory(DWORD pdItemSize)
 {
-	bool FitInStack = false;
-	LONG nPack = 0;
-	LONG Count = 0;
-	PCHARINFO pCharInfo = GetCharInfo();
 	auto pChar2 = GetPcProfile();
 	if (pChar2)
 	{
