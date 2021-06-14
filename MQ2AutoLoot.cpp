@@ -1128,7 +1128,7 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 	if (pChar2)
 	{
 		//check my inventory slots
-		for (int nSlot = InvSlot_FirstBagSlot; nSlot < GetHighestAvailableBagSlot(); nSlot++)
+		for (int nSlot = InvSlot_FirstBagSlot; nSlot <= GetHighestAvailableBagSlot(); nSlot++)
 		{
 			if (ItemPtr pItem = pChar2->GetInventorySlot(nSlot))
 			{
@@ -1150,7 +1150,7 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 		}
 
 		//Checking my bags
-		for (int nPack = InvSlot_FirstBagSlot; nPack < GetHighestAvailableBagSlot(); nPack++)
+		for (int nPack = InvSlot_FirstBagSlot; nPack <= GetHighestAvailableBagSlot(); nPack++)
 		{
 			if (CONTENTS* pPack = pChar2->GetInventorySlot(nPack))
 			{
