@@ -1,3 +1,4 @@
+
 #pragma once
 #include <chrono>
 
@@ -45,12 +46,12 @@ bool DestroyStuff(); // Will find items you loot marked destroy and delete them
 bool CheckWindows(bool ItemOnCursor);  // Returns true if your attempting to accept trade requests or click the confirmation box for no drop items
 void ClearLootEntries(); // Clears out the LootEntries from the non-ML toons
 bool SetLootSettings(); // Turn off Auto Loot All
-bool HandlePersonalLoot(bool ItemOnCursor, PCHARINFO pChar, PcProfile* pChar2, CAdvancedLootWnd* pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList); // Handle items in your personal loot window
-bool HandleSharedLoot(bool ItemOnCursor, PCHARINFO pChar, PcProfile* pChar2, CAdvancedLootWnd* pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList); // Handle items in your shared loot window
+bool HandlePersonalLoot(bool ItemOnCursor, CHARINFO* pChar, PcProfile* pChar2, CAdvancedLootWnd* pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList); // Handle items in your personal loot window
+bool HandleSharedLoot(bool ItemOnCursor, CHARINFO* pChar, PcProfile* pChar2, CAdvancedLootWnd* pAdvLoot, CListWnd *pPersonalList, CListWnd *pSharedList); // Handle items in your shared loot window
 bool WinState(CXWnd *Wnd);
 bool HandleEQBC();  // Used to get EQBC Names
-bool AmITheMasterLooter(PCHARINFO pChar, bool* pbMasterLooter); // Determines if the character is the master looter, if it has to set a master looter it instructs the plugin to pause looting
-bool ParseLootEntry(bool ItemOnCursor, PCHARINFO pChar, PcProfile* pChar2, AdvancedLootItem* pLootItem, bool bMasterLooter, char* pszItemAction, bool* pbIWant, bool* pbCheckIfOthersWant); // Parse loot entry for an item and determine an appropriate action
+bool AmITheMasterLooter(CHARINFO* pChar, bool* pbMasterLooter); // Determines if the character is the master looter, if it has to set a master looter it instructs the plugin to pause looting
+bool ParseLootEntry(bool ItemOnCursor, AdvancedLootItem* pLootItem, bool bMasterLooter, char* pszItemAction, bool* pbIWant, bool* pbCheckIfOthersWant); // Parse loot entry for an item and determine an appropriate action
 void InitialLootEntry(AdvancedLootItem* pLootItem, bool bCreateImmediately); // Create the initial loot entry for a new item or one where we don't recognize the loot action as valid
 bool DoIHaveSpace(CHAR* pszItemName, DWORD plMaxStackSize, DWORD pdStackSize, bool bSaveBagSlots);
 bool FitInInventory(DWORD pdItemSize);
@@ -66,4 +67,5 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine);
 LONG SetBOOL(long Cur, PCHAR Val, PCHAR Sec = "", PCHAR Key = "", PCHAR INI = "");
 void SetItemCommand(PSPAWNINFO pCHAR, PCHAR szLine);
 void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem);
-bool dataAutoLoot(const char* szName, MQTypeVar &Ret);
+bool dataAutoLoot(const char* szName, MQTypeVar& Ret);
+

@@ -1,8 +1,6 @@
-#include <chrono>
 
-constexpr int PERSONALBANKER_CLASS = 40;
-constexpr int MERCHANT_CLASS = 41;
-constexpr int GUILDBANKER_CLASS = 66;
+#pragma once
+#include <chrono>
 
 typedef std::chrono::high_resolution_clock pluginclock;
 
@@ -14,7 +12,7 @@ extern bool                         bBuyActive;
 extern bool                         bBarterReset; // Set to true when you need to refresh your barter search
 extern bool                         bBarterItemSold; // Set to true when you sell an item
 extern bool                         bEndThreads; // Set to true when you want to end any threads out there, also it is used to enforce that at most a single thread is active at one time
-extern CONTENTS*                    pItemToPickUp;
+extern ItemPtr                      pItemToPickUp;
 extern CXWnd*                       pWndLeftMouseUp;
 extern pluginclock::time_point      LootThreadTimer;
 
@@ -23,19 +21,21 @@ void ResetItemActions();
 bool MoveToNPC(PSPAWNINFO pSpawn);
 bool HandleMoveUtils();  // Used to connect to MQ2MoveUtils
 bool OpenWindow(PSPAWNINFO pSpawn);
-bool WaitForItemToBeSelected(CONTENTS* pItem, short InvSlot, short BagSlot);
+bool WaitForItemToBeSelected(const ItemPtr& pItem, short InvSlot, short BagSlot);
 bool WaitForItemToBeSold(short InvSlot, short BagSlot);
-void SellItem(CONTENTS* pItem);
-bool FitInPersonalBank(PITEMINFO pItem);
-void PutInPersonalBank(PITEMINFO pItem);
-bool CheckGuildBank(PITEMINFO pItem);
-bool PutInGuildBank(PITEMINFO pItem);
-bool DepositItems(PITEMINFO pItem);
-void SetItemPermissions(PITEMINFO pItem);
-void BarterSearch(int nBarterItems, const char* pszItemName, DWORD MyBarterMinimum, CListWnd *cListInvWnd);
-int FindBarterIndex(const char* pszItemName, DWORD MyBarterMinimum, CListWnd *cBuyLineListWnd);
-bool SelectBarterSell (int BarterMaximumIndex, CListWnd *cBuyLineListWnd);
-void SelectBarterQuantity(int BarterMaximumIndex, const char* pszItemName, CListWnd *cBuyLineListWnd);
+
+void SellItem(const ItemPtr& pItem);
+bool FitInPersonalBank(const ItemPtr& pItem);
+void PutInPersonalBank(const ItemPtr& pItem);
+bool CheckGuildBank(const ItemPtr& pItem);
+bool PutInGuildBank(const ItemPtr& pItem);
+bool DepositItems(const ItemPtr& pItem);
+void SetItemPermissions(const ItemPtr& pItem);
+void BarterSearch(int nBarterItems, const char* pszItemName, DWORD MyBarterMinimum, CListWnd* cListInvWnd);
+int FindBarterIndex(const char* pszItemName, DWORD MyBarterMinimum, CListWnd* cBuyLineListWnd);
+bool SelectBarterSell(int BarterMaximumIndex, CListWnd* cBuyLineListWnd);
+void SelectBarterQuantity(int BarterMaximumIndex, const char* pszItemName, CListWnd* cBuyLineListWnd);
+
 DWORD __stdcall SellItems(PVOID pData);
 DWORD __stdcall BuyItem(PVOID pData);
 DWORD __stdcall DepositPersonalBanker(PVOID pData);
