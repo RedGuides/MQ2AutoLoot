@@ -282,7 +282,7 @@ void SellItem(const ItemPtr& pItem)
 		}
 		// We need to call PickupItem(eItemContainerPossessions, pItemToPickUp) within the pulse due to eq not being thread safe
 		pItemToPickUp = pItem; // This is our backhanded way of doing it to avoid crashing some people
-		pluginclock::time_point WhileTimer = pluginclock::now() + std::chrono::seconds(30);
+		const pluginclock::time_point WhileTimer = pluginclock::now() + std::chrono::seconds(30);
 		while (pluginclock::now() < WhileTimer) // Will wait up to 30 seconds or until I get the merchant buys the item
 		{
 			if (!InGameOK() || bEndThreads || !WinState(pMerchantWnd))
@@ -324,42 +324,45 @@ void SellItem(const ItemPtr& pItem)
 
 bool FitInPersonalBank(const ItemPtr& pItem)
 {
-	CHAR INISection[MAX_STRING] = { 0 };
-	CHAR Value[MAX_STRING] = { 0 };
-	sprintf_s(INISection, "%c", pItem->GetName()[0]);
-
-	if (GetPrivateProfileString(INISection, pItem->GetName(), 0, Value, MAX_STRING, szLootINI) != 0)
+	if (pItem)
 	{
-		CHAR* pParsedToken = NULL;
-		CHAR* pParsedValue = strtok_s(Value, "|", &pParsedToken);
-		if (_stricmp(pParsedValue, "Keep"))
-		{
-			return false; // The item isn't set to Keep
-		}
-	}
-	else
-	{
-		return false;  // The item isn't in your loot.ini file
-	}
+		CHAR INISection[MAX_STRING] = { 0 };
+		CHAR Value[MAX_STRING] = { 0 };
+		sprintf_s(INISection, "%c", pItem->GetName()[0]);
 
-	for (int nPack = 0; nPack < GetAvailableBankSlots(); nPack++)
-	{
-		ItemPtr pBankItem = pLocalPC->BankItems.GetItem(nPack);
-
-		if (!pBankItem)
+		if (GetPrivateProfileString(INISection, pItem->GetName(), 0, Value, MAX_STRING, szLootINI) != 0)
 		{
-			return true;
-		}
-
-		// checking inside bank bags
-		if (pBankItem->IsContainer()
-			&& pBankItem->GetItemDefinition()->SizeCapacity >= pItem->GetItemDefinition()->Size
-			&& !ci_equals(pBankItem->GetName(), szExcludeBag1)
-			&& !ci_equals(pBankItem->GetName(), szExcludeBag2))
-		{
-			for (const ItemPtr& pBagItem : pBankItem->GetHeldItems())
+			CHAR* pParsedToken = NULL;
+			CHAR* pParsedValue = strtok_s(Value, "|", &pParsedToken);
+			if (_stricmp(pParsedValue, "Keep"))
 			{
-				if (!pBagItem) return true;
+				return false; // The item isn't set to Keep
+			}
+		}
+		else
+		{
+			return false;  // The item isn't in your loot.ini file
+		}
+
+		for (int nPack = 0; nPack < GetAvailableBankSlots(); nPack++)
+		{
+			ItemPtr pBankItem = pLocalPC->BankItems.GetItem(nPack);
+
+			if (!pBankItem)
+			{
+				return true;
+			}
+
+			// checking inside bank bags
+			if (pBankItem->IsContainer()
+				&& pBankItem->GetItemDefinition()->SizeCapacity >= pItem->GetItemDefinition()->Size
+				&& !ci_equals(pBankItem->GetName(), szExcludeBag1)
+				&& !ci_equals(pBankItem->GetName(), szExcludeBag2))
+			{
+				for (const ItemPtr& pBagItem : pBankItem->GetHeldItems())
+				{
+					if (!pBagItem) return true;
+				}
 			}
 		}
 	}
@@ -437,8 +440,12 @@ bool CheckGuildBank(const ItemPtr& pItem)
 		return false;
 	}
 
+	if (!pItem)
+		return false;
+
 	CHAR INISection[MAX_STRING] = { 0 };
 	CHAR Value[MAX_STRING] = { 0 };
+
 	sprintf_s(INISection, "%c", pItem->GetName()[0]);
 	if (GetPrivateProfileString(INISection, pItem->GetName(), 0, Value, MAX_STRING, szLootINI) != 0)
 	{
@@ -495,44 +502,33 @@ bool CheckGuildBank(const ItemPtr& pItem)
 						{
 							return true;
 						}
-						else
-						{
-							WriteChatf("%s:: Guild bank ran out of space, closing guild bank window", PLUGIN_CHAT_MSG);
-							bEndThreads = true;
-							return false;
-						}
+
+						WriteChatf("%s:: Guild bank ran out of space, closing guild bank window", PLUGIN_CHAT_MSG);
+						bEndThreads = true;
 					}
 					else
 					{
 						WriteChatf("%s:: %s is lore and you have one already in your guild bank, skipping depositing.", PLUGIN_CHAT_MSG, pItem->GetName());
 						EzCommand("/autoinventory");
 						Sleep(1000); // TODO figure out what to wait for so I don't have to hardcode this long of a delay
-						return false;
 					}
 				}
 				else // The guild bank window doesn't have a deposit button
 				{
 					WriteChatf("%s:: Can't find deposit button on guild bank window", PLUGIN_CHAT_MSG);
 					bEndThreads = true;
-					return false;
 				}
 			}
 			else // Guild Bank Window isn't open, bugging out of this thread
 			{
 				WriteChatf("%s:: Guild bank window is closed", PLUGIN_CHAT_MSG);
 				bEndThreads = true;
-				return false;
 			}
 		}
-		else // The item isn't set to be deposited, moving onto the next item
-		{
-			return false;
-		}
+		// The item isn't set to be deposited, moving onto the next item
 	}
-	else // The item isn't in loot.ini file, moving onto the next item
-	{
-		return false;
-	}
+	// The item isn't in loot.ini file, moving onto the next item
+	return false;
 }
 
 bool DepositItems(const ItemPtr& pItem)  //This should only be run from inside threads
@@ -1155,9 +1151,9 @@ DWORD __stdcall SellItems(PVOID pData)
 
 			// It isn't a pack! we should sell it
 			sprintf_s(INISection, "%c", pItem->GetName()[0]);
-			if (GetPrivateProfileString(INISection, pItem->GetName(), 0, Value, MAX_STRING, szLootINI) != 0)
+			if (GetPrivateProfileString(INISection, pItem->GetName(), nullptr, Value, MAX_STRING, szLootINI) != 0)
 			{
-				CHAR* pParsedToken = NULL;
+				CHAR* pParsedToken = nullptr;
 				CHAR* pParsedValue = strtok_s(Value, "|", &pParsedToken);
 				if (!_stricmp(pParsedValue, "Sell"))
 				{
@@ -1194,6 +1190,9 @@ DWORD __stdcall SellItems(PVOID pData)
 
 			for (const ItemPtr& pItem : pPack->GetHeldItems())
 			{
+				if (!pItem)
+					continue;
+
 				sprintf_s(INISection, "%c", pItem->GetName()[0]);
 
 				if (GetPrivateProfileString(INISection, pItem->GetName(), 0, Value, MAX_STRING, szLootINI) != 0)
@@ -1654,7 +1653,7 @@ DWORD __stdcall DepositGuildBanker(PVOID pData)
 			for (const ItemPtr& pItem : pPack->GetHeldItems())
 			{
 				if (!pItem)
-				  continue;
+					continue;
 
 				if (CheckGuildBank(pItem) && DepositItems(pItem) && PutInGuildBank(pItem))
 				{
