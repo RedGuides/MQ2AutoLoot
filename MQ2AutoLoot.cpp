@@ -407,9 +407,10 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 	{
 		if (pTradeWnd->HisTradeReady && !pTradeWnd->MyTradeReady && !ItemOnCursor)
 		{
-			if (HandleEQBC())
+			CXStr hisName = pTradeWnd->HisNameLabel->GetWindowText();
+			if (!hisName.empty() && HandleEQBC())
 			{
-				if (fAreTheyConnected(pTradeWnd->HisNameLabel->GetWindowText().c_str()))
+				if (fAreTheyConnected(hisName.c_str()))
 				{
 					SendWndClick2(pTradeWnd->TradeButton, "leftmouseup");
 					LootTimer = pluginclock::now() + std::chrono::milliseconds(1000);
