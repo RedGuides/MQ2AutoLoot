@@ -737,7 +737,7 @@ bool HandleEQBC()
 	if (MQPlugin* pPlugin = GetPlugin("mq2eqbc"))
 	{
 		auto fisConnected = (unsigned short(*)())GetProcAddress(pPlugin->hModule, "isConnected");
-		auto fAreTheyConnected = (bool(*)(const char*))GetProcAddress(pPlugin->hModule, "AreTheyConnected");
+		fAreTheyConnected = (bool(*)(const char*))GetProcAddress(pPlugin->hModule, "AreTheyConnected");
 		if (fisConnected && fAreTheyConnected && fisConnected())
 		{
 			return true;
