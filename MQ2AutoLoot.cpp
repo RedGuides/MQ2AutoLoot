@@ -335,7 +335,7 @@ bool DestroyStuff()
 
 	for (const ItemPtr& pItemPack : pProfile->GetInventory().GetRange(InvSlot_FirstBagSlot, GetHighestAvailableBagSlot()))
 	{
-		if (pItemPack->IsContainer())
+		if (pItemPack && pItemPack->IsContainer())
 		{
 			for (const ItemPtr& pItem : pItemPack->GetHeldItems())
 			{
