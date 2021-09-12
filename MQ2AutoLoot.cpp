@@ -351,7 +351,7 @@ bool DestroyStuff()
 	return true;
 }
 
-bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accept trade requests or click the confirmation box for no drop items
+bool CheckWindows(bool ItemOnCursor) // Returns true if you're attempting to accept trade requests or click the confirmation box for no drop items
 {
 	// When confirmation box for looting no drop items pops up this will allow it to be clicked
 	if (CSidlScreenWnd* pWnd = (CSidlScreenWnd*)FindMQ2Window("ConfirmationDialogBox"))
@@ -366,7 +366,7 @@ bool CheckWindows(bool ItemOnCursor) // Returns true if your attempting to accep
 					{
 						for (const ItemPtr& pItem : pLootWnd->GetLootItems())
 						{
-							if (ci_find_substr(Child->STMLText, pItem->GetName()) != -1)
+							if (pItem && ci_find_substr(Child->STMLText, pItem->GetName()) != -1)
 							{
 								if (!CheckIfItemIsLoreByID(pItem->GetID()))
 								{
