@@ -359,6 +359,12 @@ bool FitInPersonalBank(const ItemPtr& pItem)
 				&& !ci_equals(pBankItem->GetName(), szExcludeBag1)
 				&& !ci_equals(pBankItem->GetName(), szExcludeBag2))
 			{
+				const ItemContainer& heldItems = pItem->GetHeldItems();
+				if (heldItems.IsEmpty())
+				{
+					return true;
+				}
+
 				for (const ItemPtr& pBagItem : pBankItem->GetHeldItems())
 				{
 					if (!pBagItem) return true;

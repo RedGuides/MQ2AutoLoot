@@ -1108,19 +1108,29 @@ bool DoIHaveSpace(CHAR* pszItemName, DWORD pdMaxStackSize, DWORD pdStackSize, bo
 		}
 		else if (pItem->IsContainer())
 		{
-			for (const ItemPtr& pInnerItem : pItem->GetHeldItems())
+			// Excluded bags are included if there's a stackable item in them
+			const bool isExcluded = ci_equals(pItem->GetName(), szExcludeBag1) || ci_equals(pItem->GetName(), szExcludeBag2);
+			const ItemContainer& heldItems = pItem->GetHeldItems();
+			if (heldItems.IsEmpty() && !isExcluded)
 			{
-				if (pInnerItem)
+				freeSlots += heldItems.GetSize();
+			}
+			else
+			{
+				for (const ItemPtr& pInnerItem : heldItems)
 				{
-					if (pInnerItem->IsStackable() && ci_equals(pInnerItem->GetName(), pszItemName)
-						&& pInnerItem->GetItemCount() + pdStackSize <= pdMaxStackSize)
+					if (pInnerItem)
 					{
-						return true;
+						if (pInnerItem->IsStackable() && ci_equals(pInnerItem->GetName(), pszItemName)
+							&& pInnerItem->GetItemCount() + pdStackSize <= pdMaxStackSize)
+						{
+							return true;
+						}
 					}
-				}
-				else if (!ci_equals(pItem->GetName(), szExcludeBag1) && !ci_equals(pItem->GetName(), szExcludeBag2))
-				{
-					freeSlots++;
+					else if (!isExcluded)
+					{
+						freeSlots++;
+					}
 				}
 			}
 		}
@@ -1147,11 +1157,17 @@ bool FitInInventory(DWORD pdItemSize)
 			return true;
 		}
 
-		if (pItem->IsContainer() && pItem->GetItemDefinition()->SizeCapacity >= pdItemSize)
+		if (pItem->IsContainer() && pItem->GetItemDefinition()->SizeCapacity >= pdItemSize && !ci_equals(pItem->GetName(), szExcludeBag1) && !ci_equals(pItem->GetName(), szExcludeBag2))
 		{
-			for (const ItemPtr& pInnerItem : pItem->GetHeldItems())
+			const ItemContainer& heldItems = pItem->GetHeldItems();
+			if (heldItems.IsEmpty())
 			{
-				if (!pInnerItem && !ci_equals(pItem->GetName(), szExcludeBag1) && !ci_equals(pItem->GetName(), szExcludeBag2))
+				return true;
+			}
+
+			for (const ItemPtr& pInnerItem : heldItems)
+			{
+				if (!pInnerItem)
 				{
 					return true;
 				}
@@ -1487,11 +1503,19 @@ int AutoLootFreeInventory()
 			&& !ci_equals(pItem->GetName(), szExcludeBag1)
 			&& !ci_equals(pItem->GetName(), szExcludeBag2))
 		{
-			for (const ItemPtr& pInnerItem : pItem->GetHeldItems())
+			const ItemContainer& heldItems = pItem->GetHeldItems();
+			if (heldItems.IsEmpty())
 			{
-				if (!pInnerItem)
+				freeSlots += heldItems.GetSize();
+			}
+			else
+			{
+				for (const ItemPtr& pInnerItem : heldItems)
 				{
-					freeSlots++;
+					if (!pInnerItem)
+					{
+						freeSlots++;
+					}
 				}
 			}
 		}
