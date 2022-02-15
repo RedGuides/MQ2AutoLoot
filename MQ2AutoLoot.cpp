@@ -619,7 +619,7 @@ bool HandleSharedLoot(bool ItemOnCursor, CHARINFO* pChar, PcProfile* pProfile, C
 										{
 											//DebugSpew("CheckIfOthersWant = %d", CheckIfOthersWant);
 											DWORD nThreadID = 0;
-											hPassOutLootThread = CreateThread(NULL, NULL, PassOutLoot, (PVOID)k, 0, &nThreadID);
+											hPassOutLootThread = CreateThread(NULL, NULL, PassOutLoot, (PVOID)(intptr_t)k, 0, &nThreadID);
 											LootTimer = pluginclock::now() + std::chrono::seconds(iDistributeLootDelay) + std::chrono::seconds(30); // Lets lock out the plugin from doing loot actions while we attempt to pass out items
 											return true;
 										}
@@ -1245,7 +1245,7 @@ DWORD __stdcall PassOutLoot(PVOID pData)
 		hPassOutLootThread = 0;
 		return 0;
 	}
-	LONG k = (LONG)pData;
+	LONG k = (LONG)(intptr_t)pData;
 	if (pSharedList->GetItemData(k) != -1)
 	{
 		AdvancedLootItem* pShareItem = &pAdvancedLootWnd->pCLootList->Items[(int)pSharedList->GetItemData(k)];
