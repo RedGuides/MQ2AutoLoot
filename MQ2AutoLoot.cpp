@@ -1558,8 +1558,8 @@ void CreateLogEntry(PCHAR szLogEntry)
 		}
 	}
 
-	errno_t err = fopen_s(&fOut, szLogFileName, "at");
-	if (err)
+	fOut = _fsopen(szLogFileName, "at", _SH_DENYWR);
+	if (!fOut)
 	{
 		WriteChatf("%s:: Couldn't open log file:", PLUGIN_CHAT_MSG);
 		WriteChatf("%s:: \ar%s\ax", PLUGIN_CHAT_MSG, szLogFileName);
