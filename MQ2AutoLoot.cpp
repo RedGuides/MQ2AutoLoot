@@ -1216,9 +1216,9 @@ int FindItemCount(const char* pszItemName)
 	// count items in bag slots
 	count += CountContainerItems(pProfile->GetItemPosessions(), InvSlot_FirstBagSlot, InvSlot_LastBagSlot, pszItemName);
 	// count items in bank slots
-	count += CountContainerItems(pCharData->BankItems, -1, -1, pszItemName);
+	count += CountContainerItems(pLocalPC->BankItems, -1, -1, pszItemName);
 	// count items in shared bank slots
-	count += CountContainerItems(pCharData->SharedBankItems, -1, -1, pszItemName);
+	count += CountContainerItems(pLocalPC->SharedBankItems, -1, -1, pszItemName);
 
 	return count;
 }
