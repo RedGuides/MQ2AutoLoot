@@ -1536,11 +1536,11 @@ bool DirectoryExists(LPCTSTR lpszPath)
 	return (dw != INVALID_FILE_ATTRIBUTES && (dw & FILE_ATTRIBUTE_DIRECTORY) != 0);
 }
 
-void CreateLogEntry(PCHAR szLogEntry)
+void CreateLogEntry(const char* szLogEntry)
 {
 	if (!DirectoryExists(szLogPath))
 	{
-		CreateDirectory(szLogPath, NULL);
+		CreateDirectory(szLogPath, nullptr);
 		if (!DirectoryExists(szLogPath))
 		{
 			return;  //Shit i tried to create the directory and failed for some reason
@@ -1592,7 +1592,7 @@ void CreateLogEntry(PCHAR szLogEntry)
 ****
 ********************************************************************************/
 
-void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
+void AutoLootCommand(PlayerClient*, const char* szLine)
 {
 	if (!InGameOK())
 	{
@@ -1926,7 +1926,7 @@ void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	}
 }
 
-LONG SetBOOL(long Cur, PCHAR Val, PCHAR Sec, PCHAR Key, PCHAR INI)
+LONG SetBOOL(long Cur, const char* Val, const char* Sec, const char* Key, const char* INI)
 {
 	long result = 0;
 	if (!_strnicmp(Val, "false", 5) || !_strnicmp(Val, "off", 3) || !_strnicmp(Val, "0", 1))
@@ -1997,7 +1997,7 @@ void SetItemCommand(PSPAWNINFO pCHAR, PCHAR szLine)
 	}
 }
 
-void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem)
+void CreateLootEntry(const char* szAction, const char* szEntry, PITEMINFO pItem)
 {
 	PcProfile* pProfile = GetPcProfile();
 	if (!pProfile) return;

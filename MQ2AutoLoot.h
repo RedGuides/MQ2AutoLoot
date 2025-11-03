@@ -62,10 +62,10 @@ bool DistributeLoot(CHAR* szName, AdvancedLootItem* pShareItem, LONG ItemIndex);
 bool ContinueCheckingSharedLoot(); // Will stop looping through the shared loot list when the number of items clicked need/greed is equal or exceeds the number of free inventory slots
 int AutoLootFreeInventory(); // used to calculate free inventory
 bool DirectoryExists(LPCTSTR lpszPath);
-void CreateLogEntry(PCHAR szLogEntry);
-void AutoLootCommand(PSPAWNINFO pCHAR, PCHAR szLine);
-LONG SetBOOL(long Cur, PCHAR Val, PCHAR Sec = "", PCHAR Key = "", PCHAR INI = "");
-void SetItemCommand(PSPAWNINFO pCHAR, PCHAR szLine);
-void CreateLootEntry(CHAR* szAction, CHAR* szEntry, PITEMINFO pItem);
+void CreateLogEntry(const char* szLogEntry);
+void AutoLootCommand(PlayerClient* pCHAR, const char* szLine);
+LONG SetBOOL(long Cur, const char* Val, const char* Sec = "", const char* Key = "", const char* INI = "");
+void SetItemCommand(PlayerClient* pCHAR, const char* szLine);
+void CreateLootEntry(const char* szAction, const char* szEntry, PITEMINFO pItem);
 bool dataAutoLoot(const char* szName, MQTypeVar& Ret);
 
