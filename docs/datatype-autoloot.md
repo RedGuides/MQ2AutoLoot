@@ -10,29 +10,29 @@ Contains members that return the current status of the autoloot plugin, as well 
 
 ## Members
 <!--dt-members-start-->
-### {{ renderMember(type='bool', name='Active') }}
+/// member | bool Active
+Will return true when you are using MQ2AutoLoot to handle your advanced looting .
+///
 
-:   Will return true when you are using MQ2AutoLoot to handle your advanced looting .
+/// member | bool SellActive
+Will return true when your selling your items to a merchant.
+///
 
-### {{ renderMember(type='bool', name='SellActive') }}
+/// member | bool BuyActive
+Will return true when your buying itemat a merchant.
+///
 
-:   Will return true when your selling your items to a merchant.
+/// member | bool DepositActive
+Will return true when your depositing your items to a personal/guild banker.
+///
 
-### {{ renderMember(type='bool', name='BuyActive') }}
+/// member | bool BarterActive
+Will return true when your bartering your items.
+///
 
-:   Will return true when your buying itemat a merchant.
-
-### {{ renderMember(type='bool', name='DepositActive') }}
-
-:   Will return true when your depositing your items to a personal/guild banker.
-
-### {{ renderMember(type='bool', name='BarterActive') }}
-
-:   Will return true when your bartering your items.
-
-### {{ renderMember(type='int', name='FreeInventory') }}
-
-:   Will return the number of empty slots not in excludebag1 or excludebag2
+/// member | int FreeInventory
+Will return the number of empty slots not in excludebag1 or excludebag2
+///
 
 <!--dt-members-end-->
 

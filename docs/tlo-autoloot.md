@@ -10,9 +10,8 @@ Contains datatypes that concern the activity of the eponymous plugin
 
 ## Forms
 <!--tlo-forms-start-->
-### {{ renderMember(type='AutoLoot', name='AutoLoot') }}
-
-:   
+/// member | AutoLoot AutoLoot
+///
 
 <!--tlo-forms-end-->
 
